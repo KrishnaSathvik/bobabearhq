@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { starterItems } from '../data'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
-import type { WorkspaceItem } from '../types'
+import type { WorkspaceAttachment, WorkspaceItem } from '../types'
 
 type ItemRow = {
   id: string
@@ -14,6 +14,15 @@ type ItemRow = {
   amount: number | null
   created_at: string
   updated_at: string
+}
+
+type AttachmentRow = {
+  id: string
+  item_id: string
+  name: string
+  storage_path: string
+  mime_type: string | null
+  size_bytes: number | null
 }
 
 function fromRow(row: ItemRow): WorkspaceItem {
@@ -35,9 +44,19 @@ export function useWorkspaceItems() {
 
   const loadRemoteItems = useCallback(async (id: string) => {
     if (!supabase) return
-    const { data, error: queryError } = await supabase.from('items').select('*').eq('workspace_id', id).order('updated_at', { ascending: false })
+    const [{ data, error: queryError }, { data: attachmentData, error: attachmentError }] = await Promise.all([
+      supabase.from('items').select('*').eq('workspace_id', id).order('updated_at', { ascending: false }),
+      supabase.from('attachments').select('*').eq('workspace_id', id).order('created_at', { ascending: true }),
+    ])
     if (queryError) throw queryError
-    setItems((data as ItemRow[]).map(fromRow))
+    if (attachmentError) throw attachmentError
+    const attachments = (attachmentData as AttachmentRow[]).reduce<Record<string, WorkspaceAttachment[]>>((grouped, row) => {
+      const attachment = { id: row.id, name: row.name, storagePath: row.storage_path,
+        mimeType: row.mime_type ?? undefined, sizeBytes: row.size_bytes ?? undefined }
+      grouped[row.item_id] = [...(grouped[row.item_id] ?? []), attachment]
+      return grouped
+    }, {})
+    setItems((data as ItemRow[]).map(row => ({ ...fromRow(row), attachments: attachments[row.id] ?? [] })))
   }, [])
 
   useEffect(() => {
@@ -80,7 +99,7 @@ export function useWorkspaceItems() {
 
   useEffect(() => { if (!isSupabaseConfigured) localStorage.setItem('boba-bear-items', JSON.stringify(items)) }, [items])
 
-  async function saveItem(item: WorkspaceItem) {
+  async function saveItem(item: WorkspaceItem, file?: File) {
     if (!supabase || !workspaceId) {
       setItems(current => current.some(existing => existing.id === item.id)
         ? current.map(existing => existing.id === item.id ? item : existing) : [item, ...current])
@@ -94,15 +113,41 @@ export function useWorkspaceItems() {
       created_at: item.createdAt, updated_at: new Date().toISOString() }
     const { error: saveError } = await supabase.from('items').upsert(record)
     if (saveError) throw saveError
+    if (file) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-')
+      const storagePath = `${workspaceId}/${item.id}/${crypto.randomUUID()}-${safeName}`
+      const { error: uploadError } = await supabase.storage.from('workspace-files').upload(storagePath, file)
+      if (uploadError) throw uploadError
+      const { error: attachmentError } = await supabase.from('attachments').insert({
+        workspace_id: workspaceId, item_id: item.id, name: file.name, storage_path: storagePath,
+        mime_type: file.type || null, size_bytes: file.size, created_by: authData.user.id,
+      })
+      if (attachmentError) {
+        await supabase.storage.from('workspace-files').remove([storagePath])
+        throw attachmentError
+      }
+    }
     await loadRemoteItems(workspaceId)
   }
 
   async function deleteItem(id: string) {
     if (!supabase || !workspaceId) { setItems(current => current.filter(item => item.id !== id)); return }
+    const paths = items.find(item => item.id === id)?.attachments?.map(attachment => attachment.storagePath) ?? []
+    if (paths.length) {
+      const { error: storageError } = await supabase.storage.from('workspace-files').remove(paths)
+      if (storageError) throw storageError
+    }
     const { error: deleteError } = await supabase.from('items').delete().eq('id', id).eq('workspace_id', workspaceId)
     if (deleteError) throw deleteError
     await loadRemoteItems(workspaceId)
   }
 
-  return { items, loading, error, saveItem, deleteItem }
+  async function getAttachmentUrl(storagePath: string) {
+    if (!supabase) throw new Error('File storage is not connected.')
+    const { data, error: signedUrlError } = await supabase.storage.from('workspace-files').createSignedUrl(storagePath, 60)
+    if (signedUrlError) throw signedUrlError
+    return data.signedUrl
+  }
+
+  return { items, loading, error, saveItem, deleteItem, getAttachmentUrl }
 }

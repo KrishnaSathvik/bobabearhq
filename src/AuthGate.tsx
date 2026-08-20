@@ -35,7 +35,7 @@ function Login() {
     setLoading(true)
     setError('')
     const { error: authError } = await supabase.auth.signInWithPassword({ email: workspaceEmail, password })
-    if (authError) setError('That password didn’t work. Please try again.')
+    if (authError) setError(authError.message)
     setLoading(false)
   }
 

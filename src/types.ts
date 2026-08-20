@@ -1,6 +1,6 @@
 export type Section = 'Notes' | 'Menu' | 'Suppliers' | 'Store Setup' | 'Marketing' | 'Money' | 'Library'
 
-export type ItemKind = 'Note' | 'Link' | 'File' | 'Expense'
+export type ItemKind = 'Note' | 'Link' | 'File' | 'Expense' | 'Product'
 export type ItemStatus = 'Reference' | 'Researching' | 'Sample needed' | 'Testing' | 'Selected' | 'Not selected'
 
 export type WorkspaceAttachment = {
@@ -23,6 +23,7 @@ export type WorkspaceItem = {
   status?: ItemStatus
   source?: string
   importKey?: string
+  details?: Record<string, string>
   attachments?: WorkspaceAttachment[]
   createdAt: string
   updatedAt: string

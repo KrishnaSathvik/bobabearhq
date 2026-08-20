@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
-import { DollarSign, File as FileIcon, FileText, Image, Link2, Menu as MenuIcon, Paperclip, Plus, Search, X } from 'lucide-react'
+import { DollarSign, File as FileIcon, FileText, Image, Link2, Menu as MenuIcon, Package, Paperclip, Plus, Search, X } from 'lucide-react'
+import { ItemDetail } from './components/ItemDetail'
 import { sectionAreas, starterItems } from './data'
 import { useWorkspaceItems } from './hooks/useWorkspaceItems'
 import type { ItemKind, ItemStatus, Section, WorkspaceItem } from './types'
@@ -17,14 +18,16 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [editing, setEditing] = useState<WorkspaceItem | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [composerOpen, setComposerOpen] = useState(false)
 
   const visibleItems = useMemo(() => {
     const base = items.filter(item => item.section === active)
     const needle = query.trim().toLowerCase()
     if (!needle) return base
-    return base.filter(item => [item.title, item.body, item.section, item.area, item.url, item.status, item.source].some(value => value?.toLowerCase().includes(needle)))
+    return base.filter(item => [...[item.title, item.body, item.section, item.area, item.url, item.status, item.source], ...Object.values(item.details ?? {})].some(value => value?.toLowerCase().includes(needle)))
   }, [active, items, query])
+  const selectedItem = selectedId ? items.find(item => item.id === selectedId) ?? null : null
 
   async function saveItem(item: WorkspaceItem, file?: File) {
     await persistItem(item, file)
@@ -36,7 +39,8 @@ export default function App() {
     const capturedUrl = kind === 'Link' ? body : undefined
     setEditing({
       id: createId(), title: '', body: capturedUrl ? '' : body, url: capturedUrl, kind,
-      section: section ?? 'Notes', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      section: section ?? 'Notes', area: kind === 'Product' ? 'Equipment' : undefined,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     })
     setPendingFile(file ?? null)
     setComposerOpen(true)
@@ -48,10 +52,10 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <button className="mobile-menu" aria-label="Open navigation" onClick={() => setMobileOpen(v => !v)}><MenuIcon size={21} /></button>
-        <button className="brand" onClick={() => setActive('Home')}>Boba Bear HQ</button>
+        <button className="brand" onClick={() => { setActive('Home'); setSelectedId(null) }}>Boba Bear HQ</button>
         <nav className={mobileOpen ? 'nav nav-open' : 'nav'} aria-label="Main navigation">
           {sections.map(section => (
-            <button key={section} className={active === section ? 'nav-item active' : 'nav-item'} onClick={() => { setActive(section); setMobileOpen(false); setQuery('') }}>{section}</button>
+            <button key={section} className={active === section ? 'nav-item active' : 'nav-item'} onClick={() => { setActive(section); setSelectedId(null); setMobileOpen(false); setQuery('') }}>{section}</button>
           ))}
         </nav>
         <div className="top-actions">
@@ -71,15 +75,21 @@ export default function App() {
       <main>
         {error && <div className="workspace-error" role="alert">{error}</div>}
         {loading && <div className="workspace-loading">Opening your workspace…</div>}
-        {!loading && (active === 'Home' ? <Home onCreate={openNew} /> : (
-          <SectionPage section={active} items={visibleItems} query={query} setQuery={setQuery} onNew={() => openNew(active)} onEdit={item => { setEditing(item); setComposerOpen(true) }} onImport={importReferencePack} hasReferencePack={items.some(item => Boolean(item.importKey))} />
-        ))}
+        {!loading && (selectedItem ? <ItemDetail item={selectedItem} onBack={() => setSelectedId(null)}
+          onEdit={() => { setEditing(selectedItem); setComposerOpen(true) }}
+          onOpenAttachment={async path => { window.open(await getAttachmentUrl(path), '_blank', 'noopener,noreferrer') }} />
+          : active === 'Home' ? <Home onCreate={openNew} /> : (
+            <SectionPage section={active} items={visibleItems} query={query} setQuery={setQuery}
+              onNew={() => openNew(active)} onNewProduct={() => openNew('Store Setup', 'Product')}
+              onOpen={item => setSelectedId(item.id)} onImport={importReferencePack}
+              hasReferencePack={items.some(item => Boolean(item.importKey))} />
+          ))}
       </main>
 
       {composerOpen && editing && <Editor item={editing} pendingFile={pendingFile} onFileChange={setPendingFile}
         onOpenAttachment={async path => { window.open(await getAttachmentUrl(path), '_blank', 'noopener,noreferrer') }}
         onClose={() => { setComposerOpen(false); setEditing(null); setPendingFile(null) }} onSave={saveItem}
-        onDelete={async () => { await persistDelete(editing.id); setComposerOpen(false); setEditing(null); setPendingFile(null) }} />}
+        onDelete={async () => { await persistDelete(editing.id); setSelectedId(null); setComposerOpen(false); setEditing(null); setPendingFile(null) }} />}
     </div>
   )
 }
@@ -114,14 +124,14 @@ function Home({ onCreate }: { onCreate: (section?: Section, kind?: ItemKind, bod
   )
 }
 
-function SectionPage({ section, items, query, setQuery, onNew, onEdit, onImport, hasReferencePack }: { section: Section; items: WorkspaceItem[]; query: string; setQuery: (value: string) => void; onNew: () => void; onEdit: (item: WorkspaceItem) => void; onImport: () => Promise<void>; hasReferencePack: boolean }) {
+function SectionPage({ section, items, query, setQuery, onNew, onNewProduct, onOpen, onImport, hasReferencePack }: { section: Section; items: WorkspaceItem[]; query: string; setQuery: (value: string) => void; onNew: () => void; onNewProduct: () => void; onOpen: (item: WorkspaceItem) => void; onImport: () => Promise<void>; hasReferencePack: boolean }) {
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState('')
   return (
     <section className="section-page">
       <div className="section-heading">
         <div><p className="eyebrow">Workspace</p><h1>{section}</h1></div>
-        <button className="minimal-add" onClick={onNew}><Plus size={17} /> Add</button>
+        <div className="section-actions">{section === 'Store Setup' && <button className="minimal-add" onClick={onNewProduct}><Package size={16} /> Add equipment</button>}<button className="minimal-add" onClick={onNew}><Plus size={17} /> Add</button></div>
       </div>
       <div className="section-search"><Search size={18} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Search ${section.toLowerCase()}…`} /></div>
       {section === 'Library' && !hasReferencePack && <div className="reference-import">
@@ -131,10 +141,10 @@ function SectionPage({ section, items, query, setQuery, onNew, onEdit, onImport,
       {importMessage && <p className="import-message">{importMessage}</p>}
       <div className="item-list">
         {items.length === 0 ? <div className="empty-state"><p>Nothing here yet.</p><button onClick={onNew}>Add the first item</button></div> : items.map(item => (
-          <button className="item-row" key={item.id} onClick={() => onEdit(item)}>
-            <span className="item-icon">{item.kind === 'Link' ? <Link2 size={18} /> : item.kind === 'File' ? <FileIcon size={18} /> : item.kind === 'Expense' ? <DollarSign size={18} /> : <FileText size={18} />}</span>
+          <button className="item-row" key={item.id} onClick={() => onOpen(item)}>
+            <span className="item-icon">{item.kind === 'Link' ? <Link2 size={18} /> : item.kind === 'File' ? <FileIcon size={18} /> : item.kind === 'Expense' ? <DollarSign size={18} /> : item.kind === 'Product' ? <Package size={18} /> : <FileText size={18} />}</span>
             <span className="item-copy"><strong>{item.title}</strong><small>{item.body}</small></span>
-            <span className="item-meta">{item.status && <em>{item.status}</em>}{item.area ?? item.section}</span>
+            <span className="item-meta">{item.status && <em>{item.status}</em>}{item.kind === 'Product' && item.amount ? `₹${Number(item.amount).toLocaleString('en-IN')} · ` : ''}{item.area ?? item.section}</span>
           </button>
         ))}
       </div>
@@ -159,13 +169,21 @@ function Editor({ item, pendingFile, onFileChange, onOpenAttachment, onClose, on
         <input className="title-input" autoFocus value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} placeholder="Title" />
         <textarea className="body-input" value={draft.body} onChange={e => setDraft({ ...draft, body: e.target.value })} placeholder="Write anything…" />
         <div className="editor-fields">
-          <label>Type<select value={draft.kind} onChange={e => setDraft({ ...draft, kind: e.target.value as ItemKind })}><option>Note</option><option>Link</option><option>File</option><option>Expense</option></select></label>
+          <label>Type<select value={draft.kind} onChange={e => setDraft({ ...draft, kind: e.target.value as ItemKind })}><option>Note</option><option>Link</option><option>File</option><option>Expense</option><option>Product</option></select></label>
           <label>Belongs to<select value={draft.section} onChange={e => setDraft({ ...draft, section: e.target.value as Section, area: '' })}>{sections.filter(s => s !== 'Home').map(s => <option key={s}>{s}</option>)}</select></label>
           <label>Area<select value={draft.area ?? ''} onChange={e => setDraft({ ...draft, area: e.target.value })}><option value="">Choose later</option>{sectionAreas[draft.section]?.map(area => <option key={area}>{area}</option>)}</select></label>
           <label>Status<select value={draft.status ?? ''} onChange={e => setDraft({ ...draft, status: (e.target.value || undefined) as ItemStatus | undefined })}><option value="">Not set</option><option>Reference</option><option>Researching</option><option>Sample needed</option><option>Testing</option><option>Selected</option><option>Not selected</option></select></label>
         </div>
-        {(draft.kind === 'Link' || draft.kind === 'File') && <input className="url-input" value={draft.url ?? ''} onChange={e => setDraft({ ...draft, url: e.target.value })} placeholder="Paste link or file reference" />}
-        {draft.kind === 'Expense' && <label className="amount-field">Amount (₹)<input type="number" min="0" step="0.01" value={draft.amount ?? ''} onChange={e => setDraft({ ...draft, amount: e.target.value })} placeholder="0.00" /></label>}
+        {(draft.kind === 'Link' || draft.kind === 'File' || draft.kind === 'Product') && <input className="url-input" value={draft.url ?? ''} onChange={e => setDraft({ ...draft, url: e.target.value })} placeholder={draft.kind === 'Product' ? 'Product page link' : 'Paste link or file reference'} />}
+        {(draft.kind === 'Expense' || draft.kind === 'Product') && <label className="amount-field">{draft.kind === 'Product' ? 'Price / quote (₹)' : 'Amount (₹)'}<input type="number" min="0" step="0.01" value={draft.amount ?? ''} onChange={e => setDraft({ ...draft, amount: e.target.value })} placeholder="0.00" /></label>}
+        {draft.kind === 'Product' && <div className="product-fields">
+          <label>Category<input value={draft.details?.category ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, category: e.target.value } })} placeholder="Cup sealer, blender…" /></label>
+          <label>Supplier<input value={draft.details?.supplier ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, supplier: e.target.value } })} placeholder="Supplier name" /></label>
+          <label>Model / size<input value={draft.details?.model ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, model: e.target.value } })} placeholder="Model or capacity" /></label>
+          <label>MOQ<input value={draft.details?.moq ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, moq: e.target.value } })} placeholder="Minimum order" /></label>
+          <label>Lead time<input value={draft.details?.leadTime ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, leadTime: e.target.value } })} placeholder="Delivery estimate" /></label>
+          <label>Warranty / service<input value={draft.details?.warranty ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, warranty: e.target.value } })} placeholder="Local service details" /></label>
+        </div>}
         <label className="source-field">Source / reference<input value={draft.source ?? ''} onChange={e => setDraft({ ...draft, source: e.target.value })} placeholder="Optional document, conversation, or website" /></label>
         {draft.kind === 'File' && <div className="attachment-area">
           <label className="attachment-picker"><Paperclip size={16} />{pendingFile ? 'Change file' : 'Choose file'}<input type="file" hidden onChange={e => onFileChange(e.target.files?.[0] ?? null)} /></label>

@@ -16,6 +16,7 @@ type ItemRow = {
   status: WorkspaceItem['status'] | null
   source: string | null
   import_key: string | null
+  details: Record<string, string> | null
   created_at: string
   updated_at: string
 }
@@ -34,6 +35,7 @@ function fromRow(row: ItemRow): WorkspaceItem {
     area: row.area ?? undefined, url: row.url ?? undefined,
     amount: row.amount == null ? undefined : String(row.amount), status: row.status ?? undefined,
     source: row.source ?? undefined, importKey: row.import_key ?? undefined,
+    details: row.details ?? undefined,
     createdAt: row.created_at, updatedAt: row.updated_at }
 }
 
@@ -117,6 +119,7 @@ export function useWorkspaceItems() {
       kind: item.kind, section: item.section, area: item.area ?? null, url: item.url ?? null,
       amount: item.amount ? Number(item.amount) : null, created_by: authData.user.id,
       status: item.status ?? null, source: item.source ?? null, import_key: item.importKey ?? null,
+      details: item.details ?? {},
       created_at: item.createdAt, updated_at: new Date().toISOString() }
     const { error: saveError } = await supabase.from('items').upsert(record)
     if (saveError) throw saveError
@@ -175,6 +178,7 @@ export function useWorkspaceItems() {
       kind: item.kind, section: item.section, area: item.area ?? null, url: item.url ?? null,
       amount: item.amount ? Number(item.amount) : null, status: item.status ?? null,
       source: item.source ?? null, import_key: item.importKey, created_by: authData.user!.id,
+      details: item.details ?? {},
       created_at: now, updated_at: now,
     }))
     const { error: importError } = await supabase.from('items').upsert(records, { onConflict: 'workspace_id,import_key', ignoreDuplicates: true })

@@ -2,6 +2,14 @@ export type Section = 'Notes' | 'Menu' | 'Suppliers' | 'Store Setup' | 'Marketin
 
 export type ItemKind = 'Note' | 'Link' | 'File' | 'Expense'
 
+export type WorkspaceAttachment = {
+  id: string
+  name: string
+  storagePath: string
+  mimeType?: string
+  sizeBytes?: number
+}
+
 export type WorkspaceItem = {
   id: string
   title: string
@@ -11,6 +19,7 @@ export type WorkspaceItem = {
   area?: string
   url?: string
   amount?: string
+  attachments?: WorkspaceAttachment[]
   createdAt: string
   updatedAt: string
 }

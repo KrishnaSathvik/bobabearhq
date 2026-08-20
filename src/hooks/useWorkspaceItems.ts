@@ -3,6 +3,7 @@ import { starterItems } from '../data'
 import { referenceCatalog } from '../referenceCatalog'
 import { supplierSamplePlan } from '../supplierSamplePlan'
 import { locationScoutingPlan } from '../locationScoutingPlan'
+import { launchChecklistPlan } from '../launchChecklistPlan'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import type { WorkspaceAttachment, WorkspaceItem } from '../types'
 
@@ -240,5 +241,30 @@ export function useWorkspaceItems() {
     await loadRemoteItems(workspaceId)
   }
 
-  return { items, loading, error, saveItem, deleteItem, getAttachmentUrl, importReferencePack, importSupplierSamples, importLocationPlan }
+  async function importLaunchChecklist() {
+    const now = new Date().toISOString()
+    if (!supabase || !workspaceId) {
+      setItems(current => {
+        const existingKeys = new Set(current.map(item => item.importKey).filter(Boolean))
+        const additions = launchChecklistPlan.filter(item => !existingKeys.has(item.importKey)).map(item => ({
+          ...item, id: crypto.randomUUID(), createdAt: now, updatedAt: now,
+        }))
+        return [...additions, ...current]
+      })
+      return
+    }
+    const { data: authData, error: authError } = await supabase.auth.getUser()
+    if (authError || !authData.user) throw authError ?? new Error('Please sign in again.')
+    const records = launchChecklistPlan.map(item => ({
+      id: crypto.randomUUID(), workspace_id: workspaceId, title: item.title, body: item.body, kind: item.kind,
+      section: item.section, area: item.area ?? null, url: null, amount: null, status: item.status ?? null,
+      source: item.source ?? null, import_key: item.importKey, details: item.details ?? {},
+      created_by: authData.user!.id, created_at: now, updated_at: now,
+    }))
+    const { error: importError } = await supabase.from('items').upsert(records, { onConflict: 'workspace_id,import_key', ignoreDuplicates: true })
+    if (importError) throw importError
+    await loadRemoteItems(workspaceId)
+  }
+
+  return { items, loading, error, saveItem, deleteItem, getAttachmentUrl, importReferencePack, importSupplierSamples, importLocationPlan, importLaunchChecklist }
 }

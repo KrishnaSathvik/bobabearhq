@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, FileText, FlaskConical, MapPin, Package, Paperclip, Pencil } from 'lucide-react'
+import { ArrowLeft, Check, ExternalLink, FileText, FlaskConical, ListChecks, MapPin, Package, Paperclip, Pencil } from 'lucide-react'
 import type { WorkspaceItem } from '../types'
 
 type ItemDetailProps = {
@@ -17,11 +17,12 @@ const detailLabels: Record<string, string> = {
   sizeSqFt: 'Size (sq ft)', frontage: 'Frontage', visitDate: 'Visit date', footfall: 'Student footfall',
   parking: 'Parking / access', utilities: 'Water / power / drainage', deliveryAccess: 'Delivery pickup access',
   pros: 'Pros', concerns: 'Concerns',
+  phase: 'Phase', completed: 'Completed',
 }
 
 export function ItemDetail({ item, onBack, onEdit, onOpenAttachment }: ItemDetailProps) {
   const isWebLink = Boolean(item.url && /^https?:\/\//i.test(item.url))
-  const details = Object.entries(item.details ?? {}).filter(([, value]) => value.trim())
+  const details = Object.entries(item.details ?? {}).filter(([key, value]) => key !== 'sortOrder' && value.trim()).map(([key, value]) => [key, key === 'completed' ? (value === 'true' ? 'Yes' : 'No') : value] as const)
 
   return (
     <article className="detail-page">
@@ -55,6 +56,11 @@ export function ItemDetail({ item, onBack, onEdit, onOpenAttachment }: ItemDetai
         {item.kind === 'Location' && <section className="product-summary" aria-label="Location scouting details">
           <div className="product-summary-icon"><MapPin size={20} /></div>
           <div><small>Current monthly rent quote</small><strong>{item.details?.monthlyRent ? `₹${Number(item.details.monthlyRent).toLocaleString('en-IN')}` : 'Not added yet'}</strong></div>
+        </section>}
+
+        {item.kind === 'Checklist' && <section className="product-summary" aria-label="Checklist status">
+          <div className="product-summary-icon">{item.details?.completed === 'true' ? <Check size={20} /> : <ListChecks size={20} />}</div>
+          <div><small>Task status</small><strong>{item.details?.completed === 'true' ? 'Completed' : 'Not completed'}</strong></div>
         </section>}
 
         {details.length > 0 && <dl className="detail-grid">

@@ -97,6 +97,7 @@ export function useWorkspaceItems() {
         await loadRemoteItems(id)
         channel = supabase!.channel(`workspace-${id}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: `workspace_id=eq.${id}` }, () => loadRemoteItems(id!))
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'attachments', filter: `workspace_id=eq.${id}` }, () => loadRemoteItems(id!))
           .subscribe()
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : 'Could not open the shared workspace.')
@@ -110,7 +111,7 @@ export function useWorkspaceItems() {
 
   useEffect(() => { if (!isSupabaseConfigured) localStorage.setItem('boba-bear-items', JSON.stringify(items)) }, [items])
 
-  async function saveItem(item: WorkspaceItem, file?: File) {
+  async function saveItem(item: WorkspaceItem, files: File[] = []) {
     if (!supabase || !workspaceId) {
       setItems(current => current.some(existing => existing.id === item.id)
         ? current.map(existing => existing.id === item.id ? item : existing) : [item, ...current])
@@ -126,18 +127,28 @@ export function useWorkspaceItems() {
       created_at: item.createdAt, updated_at: new Date().toISOString() }
     const { error: saveError } = await supabase.from('items').upsert(record)
     if (saveError) throw saveError
-    if (file) {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-')
-      const storagePath = `${workspaceId}/${item.id}/${crypto.randomUUID()}-${safeName}`
-      const { error: uploadError } = await supabase.storage.from('workspace-files').upload(storagePath, file)
-      if (uploadError) throw uploadError
-      const { error: attachmentError } = await supabase.from('attachments').insert({
-        workspace_id: workspaceId, item_id: item.id, name: file.name, storage_path: storagePath,
-        mime_type: file.type || null, size_bytes: file.size, created_by: authData.user.id,
-      })
-      if (attachmentError) {
-        await supabase.storage.from('workspace-files').remove([storagePath])
-        throw attachmentError
+    if (files.length) {
+      const oversized = files.find(file => file.size > 25 * 1024 * 1024)
+      if (oversized) throw new Error(`${oversized.name} is larger than the 25 MB file limit.`)
+      const uploadedPaths: string[] = []
+      try {
+        const attachmentRecords = []
+        for (const file of files) {
+          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-')
+          const storagePath = `${workspaceId}/${item.id}/${crypto.randomUUID()}-${safeName}`
+          const { error: uploadError } = await supabase.storage.from('workspace-files').upload(storagePath, file)
+          if (uploadError) throw uploadError
+          uploadedPaths.push(storagePath)
+          attachmentRecords.push({
+            workspace_id: workspaceId, item_id: item.id, name: file.name, storage_path: storagePath,
+            mime_type: file.type || null, size_bytes: file.size, created_by: authData.user.id,
+          })
+        }
+        const { error: attachmentError } = await supabase.from('attachments').insert(attachmentRecords)
+        if (attachmentError) throw attachmentError
+      } catch (reason) {
+        if (uploadedPaths.length) await supabase.storage.from('workspace-files').remove(uploadedPaths)
+        throw reason
       }
     }
     await loadRemoteItems(workspaceId)
@@ -160,6 +171,20 @@ export function useWorkspaceItems() {
     const { data, error: signedUrlError } = await supabase.storage.from('workspace-files').createSignedUrl(storagePath, 60)
     if (signedUrlError) throw signedUrlError
     return data.signedUrl
+  }
+
+  async function deleteAttachment(itemId: string, attachment: WorkspaceAttachment) {
+    if (!supabase || !workspaceId) {
+      setItems(current => current.map(item => item.id === itemId
+        ? { ...item, attachments: item.attachments?.filter(file => file.id !== attachment.id) }
+        : item))
+      return
+    }
+    const { error: storageError } = await supabase.storage.from('workspace-files').remove([attachment.storagePath])
+    if (storageError) throw storageError
+    const { error: attachmentError } = await supabase.from('attachments').delete().eq('id', attachment.id).eq('workspace_id', workspaceId)
+    if (attachmentError) throw attachmentError
+    await loadRemoteItems(workspaceId)
   }
 
   async function importReferencePack() {
@@ -266,5 +291,5 @@ export function useWorkspaceItems() {
     await loadRemoteItems(workspaceId)
   }
 
-  return { items, loading, error, saveItem, deleteItem, getAttachmentUrl, importReferencePack, importSupplierSamples, importLocationPlan, importLaunchChecklist }
+  return { items, loading, error, saveItem, deleteItem, getAttachmentUrl, deleteAttachment, importReferencePack, importSupplierSamples, importLocationPlan, importLaunchChecklist }
 }

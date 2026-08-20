@@ -17,7 +17,7 @@ function createId() {
 
 export default function App() {
   const [active, setActive] = useState<'Home' | Section>('Home')
-  const { items, loading, error, saveItem: persistItem, deleteItem: persistDelete, getAttachmentUrl, importReferencePack, importSupplierSamples, importLocationPlan, importLaunchChecklist } = useWorkspaceItems()
+  const { items, loading, error, saveItem: persistItem, deleteItem: persistDelete, getAttachmentUrl, deleteAttachment, importReferencePack, importSupplierSamples, importLocationPlan, importLaunchChecklist } = useWorkspaceItems()
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -33,8 +33,8 @@ export default function App() {
   }, [active, items, query])
   const selectedItem = selectedId ? items.find(item => item.id === selectedId) ?? null : null
 
-  async function saveItem(item: WorkspaceItem, file?: File) {
-    await persistItem(item, file)
+  async function saveItem(item: WorkspaceItem, files?: File[]) {
+    await persistItem(item, files)
     setComposerOpen(false)
     setEditing(null)
   }
@@ -48,11 +48,11 @@ export default function App() {
       details: kind === 'Checklist' ? { phase: 'Planning', completed: 'false' } : kind === 'Quote' ? { category: 'Equipment', date: new Date().toISOString().slice(0, 10), vendor: '' } : kind === 'Expense' ? { category: 'Equipment', date: new Date().toISOString().slice(0, 10), expenseType: 'Purchase', paymentStatus: 'Paid', vendor: '' } : undefined,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     })
-    setPendingFile(file ?? null)
+    setPendingFiles(file ? [file] : [])
     setComposerOpen(true)
   }
 
-  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
 
   return (
     <div className="app-shell">
@@ -101,10 +101,11 @@ export default function App() {
           ))}
       </main>
 
-      {composerOpen && editing && <Editor item={editing} pendingFile={pendingFile} onFileChange={setPendingFile}
+      {composerOpen && editing && <Editor item={editing} pendingFiles={pendingFiles} onFilesChange={setPendingFiles}
         onOpenAttachment={async path => { window.open(await getAttachmentUrl(path), '_blank', 'noopener,noreferrer') }}
-        onClose={() => { setComposerOpen(false); setEditing(null); setPendingFile(null) }} onSave={saveItem}
-        onDelete={async () => { await persistDelete(editing.id); setSelectedId(null); setComposerOpen(false); setEditing(null); setPendingFile(null) }} />}
+        onDeleteAttachment={attachment => deleteAttachment(editing.id, attachment)}
+        onClose={() => { setComposerOpen(false); setEditing(null); setPendingFiles([]) }} onSave={saveItem}
+        onDelete={async () => { await persistDelete(editing.id); setSelectedId(null); setComposerOpen(false); setEditing(null); setPendingFiles([]) }} />}
     </div>
   )
 }
@@ -171,19 +172,20 @@ function SectionPage({ section, items, allItems, query, setQuery, onNew, onNewPr
   )
 }
 
-function Editor({ item, pendingFile, onFileChange, onOpenAttachment, onClose, onSave, onDelete }: {
-  item: WorkspaceItem; pendingFile: File | null; onFileChange: (file: File | null) => void;
-  onOpenAttachment: (path: string) => Promise<void>; onClose: () => void;
-  onSave: (item: WorkspaceItem, file?: File) => Promise<void>; onDelete: () => Promise<void>
+function Editor({ item, pendingFiles, onFilesChange, onOpenAttachment, onDeleteAttachment, onClose, onSave, onDelete }: {
+  item: WorkspaceItem; pendingFiles: File[]; onFilesChange: (files: File[]) => void;
+  onOpenAttachment: (path: string) => Promise<void>; onDeleteAttachment: (attachment: NonNullable<WorkspaceItem['attachments']>[number]) => Promise<void>; onClose: () => void;
+  onSave: (item: WorkspaceItem, files?: File[]) => Promise<void>; onDelete: () => Promise<void>
 }) {
   const [draft, setDraft] = useState(item)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [attachmentError, setAttachmentError] = useState('')
   const isExisting = starterItems.some(x => x.id === item.id) || Boolean(item.title)
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <form className="editor" onMouseDown={e => e.stopPropagation()} onSubmit={async e => { e.preventDefault(); if (!draft.title.trim()) return; setSaving(true); setSaveError(''); try { await onSave({ ...draft, updatedAt: new Date().toISOString() }, pendingFile ?? undefined) } catch (reason) { setSaveError(reason instanceof Error ? reason.message : 'Could not save this item.'); setSaving(false) } }}>
+      <form className="editor" onMouseDown={e => e.stopPropagation()} onSubmit={async e => { e.preventDefault(); if (!draft.title.trim()) return; setSaving(true); setSaveError(''); try { await onSave({ ...draft, updatedAt: new Date().toISOString() }, pendingFiles) } catch (reason) { setSaveError(reason instanceof Error ? reason.message : 'Could not save this item.'); setSaving(false) } }}>
         <div className="editor-top"><span>{isExisting ? 'Edit item' : 'Add to workspace'}</span><button type="button" onClick={onClose}><X size={20} /></button></div>
         <input className="title-input" autoFocus value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} placeholder="Title" />
         <textarea className="body-input" value={draft.body} onChange={e => setDraft({ ...draft, body: e.target.value })} placeholder="Write anything…" />
@@ -249,11 +251,13 @@ function Editor({ item, pendingFile, onFileChange, onOpenAttachment, onClose, on
           </>}
         </div>}
         <label className="source-field">Source / reference<input value={draft.source ?? ''} onChange={e => setDraft({ ...draft, source: e.target.value })} placeholder="Optional document, conversation, or website" /></label>
-        {draft.kind === 'File' && <div className="attachment-area">
-          <label className="attachment-picker"><Paperclip size={16} />{pendingFile ? 'Change file' : 'Choose file'}<input type="file" hidden onChange={e => onFileChange(e.target.files?.[0] ?? null)} /></label>
-          {pendingFile && <span>{pendingFile.name}</span>}
-          {draft.attachments?.map(attachment => <button type="button" key={attachment.id} onClick={() => onOpenAttachment(attachment.storagePath)}>{attachment.name}</button>)}
-        </div>}
+        <div className="attachment-area">
+          <div className="attachment-heading"><span>Files</span><small>PDF, Word, Excel, photos and screenshots · 25 MB each</small></div>
+          <label className="attachment-picker"><Paperclip size={16} />Attach files<input type="file" hidden multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.html" onChange={e => { const files = Array.from(e.target.files ?? []); onFilesChange([...pendingFiles, ...files]); e.target.value = '' }} /></label>
+          {pendingFiles.map((file, index) => <div className="attachment-record pending" key={`${file.name}-${file.size}-${index}`}><span>{file.name}<small>{formatFileSize(file.size)} · ready to upload</small></span><button type="button" onClick={() => onFilesChange(pendingFiles.filter((_, fileIndex) => fileIndex !== index))}>Remove</button></div>)}
+          {draft.attachments?.map(attachment => <div className="attachment-record" key={attachment.id}><button type="button" className="attachment-open" onClick={() => onOpenAttachment(attachment.storagePath)}>{attachment.name}<small>{attachment.sizeBytes ? formatFileSize(attachment.sizeBytes) : 'Saved file'}</small></button><button type="button" className="attachment-remove" onClick={async () => { if (!window.confirm(`Remove ${attachment.name}?`)) return; setAttachmentError(''); try { await onDeleteAttachment(attachment); setDraft(current => ({ ...current, attachments: current.attachments?.filter(file => file.id !== attachment.id) })) } catch (reason) { setAttachmentError(reason instanceof Error ? reason.message : 'Could not remove this file.') } }}>Remove</button></div>)}
+          {attachmentError && <p className="attachment-error">{attachmentError}</p>}
+        </div>
         {saveError && <p className="auth-error" role="alert">{saveError}</p>}
         <div className="editor-bottom">{isExisting ? (confirmDelete
           ? <span className="delete-confirm"><button type="button" onClick={() => setConfirmDelete(false)}>Cancel</button><button type="button" className="delete-button" onClick={onDelete}>Delete permanently</button></span>
@@ -262,4 +266,10 @@ function Editor({ item, pendingFile, onFileChange, onOpenAttachment, onClose, on
       </form>
     </div>
   )
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }

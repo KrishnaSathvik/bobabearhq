@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { starterItems } from '../data'
+import { createId } from '../lib/ids'
 import { referenceCatalog } from '../referenceCatalog'
 import { supplierSamplePlan } from '../supplierSamplePlan'
 import { locationScoutingPlan } from '../locationScoutingPlan'
@@ -42,6 +43,8 @@ function fromRow(row: ItemRow): WorkspaceItem {
     createdAt: row.created_at, updatedAt: row.updated_at }
 }
 
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+
 function loadLocalItems() {
   const stored = localStorage.getItem('boba-bear-items')
   return stored ? (JSON.parse(stored) as WorkspaceItem[]) : starterItems
@@ -52,6 +55,19 @@ export function useWorkspaceItems() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [loading, setLoading] = useState(isSupabaseConfigured)
   const [error, setError] = useState('')
+  const [liveSync, setLiveSync] = useState(!isSupabaseConfigured)
+
+  // Each starter pack is detected by its own keys. Checking merely "has any
+  // importKey" meant importing the checklist permanently hid the reference pack.
+  const importedPacks = useMemo(() => {
+    const keys = new Set(items.map(item => item.importKey).filter(Boolean))
+    return {
+      reference: referenceCatalog.some(entry => keys.has(entry.importKey)),
+      samples: supplierSamplePlan.some(entry => keys.has(entry.importKey)),
+      locations: locationScoutingPlan.some(entry => keys.has(entry.importKey)),
+      checklist: launchChecklistPlan.some(entry => keys.has(entry.importKey)),
+    }
+  }, [items])
 
   const loadRemoteItems = useCallback(async (id: string) => {
     if (!supabase) return
@@ -96,9 +112,18 @@ export function useWorkspaceItems() {
         setWorkspaceId(id)
         await loadRemoteItems(id)
         channel = supabase!.channel(`workspace-${id}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: `workspace_id=eq.${id}` }, () => loadRemoteItems(id!))
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'attachments', filter: `workspace_id=eq.${id}` }, () => loadRemoteItems(id!))
-          .subscribe()
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: `workspace_id=eq.${id}` }, () => { void loadRemoteItems(id!) })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'attachments', filter: `workspace_id=eq.${id}` }, () => { void loadRemoteItems(id!) })
+          .subscribe(status => {
+            if (!active) return
+            // Without this the workspace silently stops receiving other sessions'
+            // changes and still looks perfectly healthy.
+            if (status === 'SUBSCRIBED') { setLiveSync(true); return }
+            setLiveSync(false)
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+              void loadRemoteItems(id!).catch(() => undefined)
+            }
+          })
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : 'Could not open the shared workspace.')
       } finally {
@@ -117,6 +142,11 @@ export function useWorkspaceItems() {
         ? current.map(existing => existing.id === item.id ? item : existing) : [item, ...current])
       return
     }
+    // Reject oversized files before anything is written, so a rejected upload
+    // never leaves the record itself half-saved.
+    const oversized = files.find(file => file.size > MAX_ATTACHMENT_BYTES)
+    if (oversized) throw new Error(`${oversized.name} is larger than the 25 MB file limit.`)
+
     const { data: authData } = await supabase.auth.getUser()
     if (!authData.user) throw new Error('Please sign in again.')
     const record = { id: item.id, workspace_id: workspaceId, title: item.title, body: item.body,
@@ -128,14 +158,12 @@ export function useWorkspaceItems() {
     const { error: saveError } = await supabase.from('items').upsert(record)
     if (saveError) throw saveError
     if (files.length) {
-      const oversized = files.find(file => file.size > 25 * 1024 * 1024)
-      if (oversized) throw new Error(`${oversized.name} is larger than the 25 MB file limit.`)
       const uploadedPaths: string[] = []
       try {
         const attachmentRecords = []
         for (const file of files) {
           const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-')
-          const storagePath = `${workspaceId}/${item.id}/${crypto.randomUUID()}-${safeName}`
+          const storagePath = `${workspaceId}/${item.id}/${createId()}-${safeName}`
           const { error: uploadError } = await supabase.storage.from('workspace-files').upload(storagePath, file)
           if (uploadError) throw uploadError
           uploadedPaths.push(storagePath)
@@ -150,6 +178,11 @@ export function useWorkspaceItems() {
         if (uploadedPaths.length) await supabase.storage.from('workspace-files').remove(uploadedPaths)
         throw reason
       }
+      // The item was written before its files existed, so the change other
+      // sessions already saw did not include them. Touch the row again now that
+      // the attachments are in place to broadcast a complete version.
+      await supabase.from('items').update({ updated_at: new Date().toISOString() })
+        .eq('id', item.id).eq('workspace_id', workspaceId)
     }
     await loadRemoteItems(workspaceId)
   }
@@ -157,12 +190,12 @@ export function useWorkspaceItems() {
   async function deleteItem(id: string) {
     if (!supabase || !workspaceId) { setItems(current => current.filter(item => item.id !== id)); return }
     const paths = items.find(item => item.id === id)?.attachments?.map(attachment => attachment.storagePath) ?? []
-    if (paths.length) {
-      const { error: storageError } = await supabase.storage.from('workspace-files').remove(paths)
-      if (storageError) throw storageError
-    }
+    // Delete the record first (attachment rows cascade). If the storage cleanup
+    // then fails we are left with unreferenced files, which is recoverable —
+    // the reverse order would leave records pointing at files that no longer exist.
     const { error: deleteError } = await supabase.from('items').delete().eq('id', id).eq('workspace_id', workspaceId)
     if (deleteError) throw deleteError
+    if (paths.length) await supabase.storage.from('workspace-files').remove(paths)
     await loadRemoteItems(workspaceId)
   }
 
@@ -180,10 +213,14 @@ export function useWorkspaceItems() {
         : item))
       return
     }
-    const { error: storageError } = await supabase.storage.from('workspace-files').remove([attachment.storagePath])
-    if (storageError) throw storageError
+    // Metadata first, then the file, so a failure cannot leave a record
+    // referencing a file that is already gone.
     const { error: attachmentError } = await supabase.from('attachments').delete().eq('id', attachment.id).eq('workspace_id', workspaceId)
     if (attachmentError) throw attachmentError
+    await supabase.storage.from('workspace-files').remove([attachment.storagePath])
+    // Attachment rows do not change the parent item, so touch it to broadcast.
+    await supabase.from('items').update({ updated_at: new Date().toISOString() })
+      .eq('id', itemId).eq('workspace_id', workspaceId)
     await loadRemoteItems(workspaceId)
   }
 
@@ -193,7 +230,7 @@ export function useWorkspaceItems() {
       setItems(current => {
         const existingKeys = new Set(current.map(item => item.importKey).filter(Boolean))
         const additions = referenceCatalog.filter(item => !existingKeys.has(item.importKey)).map(item => ({
-          ...item, id: crypto.randomUUID(), createdAt: now, updatedAt: now,
+          ...item, id: createId(), createdAt: now, updatedAt: now,
         }))
         return [...additions, ...current]
       })
@@ -202,7 +239,7 @@ export function useWorkspaceItems() {
     const { data: authData } = await supabase.auth.getUser()
     if (!authData.user) throw new Error('Please sign in again.')
     const records = referenceCatalog.map(item => ({
-      id: crypto.randomUUID(), workspace_id: workspaceId, title: item.title, body: item.body,
+      id: createId(), workspace_id: workspaceId, title: item.title, body: item.body,
       kind: item.kind, section: item.section, area: item.area ?? null, url: item.url ?? null,
       amount: item.amount ? Number(item.amount) : null, status: item.status ?? null,
       source: item.source ?? null, import_key: item.importKey, created_by: authData.user!.id,
@@ -220,7 +257,7 @@ export function useWorkspaceItems() {
       setItems(current => {
         const existingKeys = new Set(current.map(item => item.importKey).filter(Boolean))
         const additions = supplierSamplePlan.filter(item => !existingKeys.has(item.importKey)).map(item => ({
-          ...item, id: crypto.randomUUID(), createdAt: now, updatedAt: now,
+          ...item, id: createId(), createdAt: now, updatedAt: now,
         }))
         return [...additions, ...current]
       })
@@ -229,7 +266,7 @@ export function useWorkspaceItems() {
     const { data: authData } = await supabase.auth.getUser()
     if (!authData.user) throw new Error('Please sign in again.')
     const records = supplierSamplePlan.map(item => ({
-      id: crypto.randomUUID(), workspace_id: workspaceId, title: item.title, body: item.body,
+      id: createId(), workspace_id: workspaceId, title: item.title, body: item.body,
       kind: item.kind, section: item.section, area: item.area ?? null, url: item.url ?? null,
       amount: item.amount ? Number(item.amount) : null, status: item.status ?? null,
       source: item.source ?? null, import_key: item.importKey, details: item.details ?? {},
@@ -246,7 +283,7 @@ export function useWorkspaceItems() {
       setItems(current => {
         const existingKeys = new Set(current.map(item => item.importKey).filter(Boolean))
         const additions = locationScoutingPlan.filter(item => !existingKeys.has(item.importKey)).map(item => ({
-          ...item, id: crypto.randomUUID(), createdAt: now, updatedAt: now,
+          ...item, id: createId(), createdAt: now, updatedAt: now,
         }))
         return [...additions, ...current]
       })
@@ -255,7 +292,7 @@ export function useWorkspaceItems() {
     const { data: authData, error: authError } = await supabase.auth.getUser()
     if (authError || !authData.user) throw authError ?? new Error('Please sign in again.')
     const records = locationScoutingPlan.map(item => ({
-      id: crypto.randomUUID(), workspace_id: workspaceId, title: item.title, body: item.body, kind: item.kind,
+      id: createId(), workspace_id: workspaceId, title: item.title, body: item.body, kind: item.kind,
       section: item.section, area: item.area ?? null, url: item.url ?? null,
       amount: item.amount ? Number(item.amount) : null, status: item.status ?? null,
       source: item.source ?? null, import_key: item.importKey, details: item.details ?? {},
@@ -272,7 +309,7 @@ export function useWorkspaceItems() {
       setItems(current => {
         const existingKeys = new Set(current.map(item => item.importKey).filter(Boolean))
         const additions = launchChecklistPlan.filter(item => !existingKeys.has(item.importKey)).map(item => ({
-          ...item, id: crypto.randomUUID(), createdAt: now, updatedAt: now,
+          ...item, id: createId(), createdAt: now, updatedAt: now,
         }))
         return [...additions, ...current]
       })
@@ -281,7 +318,7 @@ export function useWorkspaceItems() {
     const { data: authData, error: authError } = await supabase.auth.getUser()
     if (authError || !authData.user) throw authError ?? new Error('Please sign in again.')
     const records = launchChecklistPlan.map(item => ({
-      id: crypto.randomUUID(), workspace_id: workspaceId, title: item.title, body: item.body, kind: item.kind,
+      id: createId(), workspace_id: workspaceId, title: item.title, body: item.body, kind: item.kind,
       section: item.section, area: item.area ?? null, url: null, amount: null, status: item.status ?? null,
       source: item.source ?? null, import_key: item.importKey, details: item.details ?? {},
       created_by: authData.user!.id, created_at: now, updated_at: now,
@@ -291,5 +328,5 @@ export function useWorkspaceItems() {
     await loadRemoteItems(workspaceId)
   }
 
-  return { items, loading, error, saveItem, deleteItem, getAttachmentUrl, deleteAttachment, importReferencePack, importSupplierSamples, importLocationPlan, importLaunchChecklist }
+  return { items, loading, error, liveSync, importedPacks, saveItem, deleteItem, getAttachmentUrl, deleteAttachment, importReferencePack, importSupplierSamples, importLocationPlan, importLaunchChecklist }
 }

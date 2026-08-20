@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { DollarSign, File as FileIcon, FileText, FlaskConical, Image, Link2, ListChecks, MapPin, Menu as MenuIcon, Package, Paperclip, Plus, Search, X } from 'lucide-react'
+import { EquipmentComparison } from './components/EquipmentComparison'
 import { ItemDetail } from './components/ItemDetail'
 import { LaunchChecklist } from './components/LaunchChecklist'
 import { LocationScoutingOverview } from './components/LocationScoutingOverview'
@@ -7,18 +8,27 @@ import { MoneyOverview } from './components/MoneyOverview'
 import { SupplierSampleOverview } from './components/SupplierSampleOverview'
 import { sectionAreas, starterItems } from './data'
 import { useWorkspaceItems } from './hooks/useWorkspaceItems'
+import { createId } from './lib/ids'
+import { formatRupees } from './lib/money'
+import { supabase } from './lib/supabase'
 import type { ItemKind, ItemStatus, Section, WorkspaceItem } from './types'
 
 const sections: Array<'Home' | Section> = ['Home', 'Notes', 'Menu', 'Suppliers', 'Store Setup', 'Marketing', 'Money', 'Library']
 
-function createId() {
-  return crypto.randomUUID()
+function matchItems(pool: WorkspaceItem[], rawQuery: string) {
+  const needle = rawQuery.trim().toLowerCase()
+  if (!needle) return pool
+  return pool.filter(item => [
+    ...[item.title, item.body, item.section, item.area, item.url, item.status, item.source],
+    ...Object.values(item.details ?? {}),
+  ].some(value => value?.toLowerCase().includes(needle)))
 }
 
 export default function App() {
   const [active, setActive] = useState<'Home' | Section>('Home')
-  const { items, loading, error, saveItem: persistItem, deleteItem: persistDelete, getAttachmentUrl, deleteAttachment, importReferencePack, importSupplierSamples, importLocationPlan, importLaunchChecklist } = useWorkspaceItems()
+  const { items, loading, error, liveSync, importedPacks, saveItem: persistItem, deleteItem: persistDelete, getAttachmentUrl, deleteAttachment, importReferencePack, importSupplierSamples, importLocationPlan, importLaunchChecklist } = useWorkspaceItems()
   const [query, setQuery] = useState('')
+  const [globalQuery, setGlobalQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [editing, setEditing] = useState<WorkspaceItem | null>(null)
@@ -27,19 +37,28 @@ export default function App() {
 
   const visibleItems = useMemo(() => {
     const base = items.filter(item => item.section === active)
-    const needle = query.trim().toLowerCase()
-    if (!needle) return base
-    return base.filter(item => [...[item.title, item.body, item.section, item.area, item.url, item.status, item.source], ...Object.values(item.details ?? {})].some(value => value?.toLowerCase().includes(needle)))
+    return matchItems(base, query)
   }, [active, items, query])
+  // The header search reads "Search everything", so it has to look outside the
+  // section that happens to be open.
+  const globalResults = useMemo(() => globalQuery.trim() ? matchItems(items, globalQuery) : [], [items, globalQuery])
   const selectedItem = selectedId ? items.find(item => item.id === selectedId) ?? null : null
+
+  function closeSearch() {
+    setSearchOpen(false)
+    setGlobalQuery('')
+  }
 
   async function saveItem(item: WorkspaceItem, files?: File[]) {
     await persistItem(item, files)
     setComposerOpen(false)
     setEditing(null)
+    // These files are uploaded now. Leaving them staged would re-upload the same
+    // file as a duplicate the next time any editor is opened and saved.
+    setPendingFiles([])
   }
 
-  function openNew(section?: Section, kind: ItemKind = 'Note', body = '', file?: File) {
+  function openNew(section?: Section, kind: ItemKind = 'Note', body = '', files?: File[]) {
     const capturedUrl = kind === 'Link' ? body : undefined
     setEditing({
       id: createId(), title: '', body: capturedUrl ? '' : body, url: capturedUrl, kind,
@@ -48,7 +67,7 @@ export default function App() {
       details: kind === 'Checklist' ? { phase: 'Planning', completed: 'false' } : kind === 'Quote' ? { category: 'Equipment', date: new Date().toISOString().slice(0, 10), vendor: '' } : kind === 'Expense' ? { category: 'Equipment', date: new Date().toISOString().slice(0, 10), expenseType: 'Purchase', paymentStatus: 'Paid', vendor: '' } : undefined,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     })
-    setPendingFiles(file ? [file] : [])
+    setPendingFiles(files ?? [])
     setComposerOpen(true)
   }
 
@@ -58,30 +77,34 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <button className="mobile-menu" aria-label="Open navigation" onClick={() => setMobileOpen(v => !v)}><MenuIcon size={21} /></button>
-        <button className="brand" onClick={() => { setActive('Home'); setSelectedId(null) }}>Boba Bear HQ</button>
+        <button className="brand" onClick={() => { setActive('Home'); setSelectedId(null); closeSearch() }}>Boba Bear HQ</button>
         <nav className={mobileOpen ? 'nav nav-open' : 'nav'} aria-label="Main navigation">
           {sections.map(section => (
-            <button key={section} className={active === section ? 'nav-item active' : 'nav-item'} onClick={() => { setActive(section); setSelectedId(null); setMobileOpen(false); setQuery('') }}>{section}</button>
+            <button key={section} className={active === section ? 'nav-item active' : 'nav-item'} onClick={() => { setActive(section); setSelectedId(null); setMobileOpen(false); setQuery(''); closeSearch() }}>{section}</button>
           ))}
         </nav>
         <div className="top-actions">
           <button className="icon-button" aria-label="Search" onClick={() => setSearchOpen(v => !v)}><Search size={25} strokeWidth={1.7} /></button>
-          <button className="avatar" aria-label="Shared account">B</button>
+          <button className="avatar" aria-label="Sign out of the shared account" title="Sign out"
+            onClick={async () => { if (supabase && window.confirm('Sign out of Boba Bear HQ?')) await supabase.auth.signOut() }}>B</button>
         </div>
       </header>
 
       {searchOpen && (
         <div className="global-search">
           <Search size={18} />
-          <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search everything…" />
-          <button aria-label="Close search" onClick={() => { setSearchOpen(false); setQuery('') }}><X size={18} /></button>
+          <input autoFocus value={globalQuery} onChange={e => setGlobalQuery(e.target.value)} placeholder="Search everything…" />
+          <button aria-label="Close search" onClick={closeSearch}><X size={18} /></button>
         </div>
       )}
 
       <main>
         {error && <div className="workspace-error" role="alert">{error}</div>}
+        {!loading && !liveSync && <div className="workspace-offline" role="status">Live updates are not connected. Refresh before editing so you do not overwrite the other session.</div>}
         {loading && <div className="workspace-loading">Opening your workspace…</div>}
-        {!loading && (selectedItem ? <ItemDetail item={selectedItem} onBack={() => setSelectedId(null)}
+        {!loading && (globalQuery.trim() ? <GlobalResults query={globalQuery} results={globalResults}
+          onOpen={item => { setSelectedId(item.id); setActive(item.section); closeSearch() }} onClear={closeSearch} />
+          : selectedItem ? <ItemDetail item={selectedItem} onBack={() => setSelectedId(null)}
           onEdit={() => { setEditing(selectedItem); setComposerOpen(true) }}
           onOpenAttachment={async path => { window.open(await getAttachmentUrl(path), '_blank', 'noopener,noreferrer') }} />
           : active === 'Home' ? <Home onCreate={openNew} /> : (
@@ -97,7 +120,7 @@ export default function App() {
               onImportLocations={importLocationPlan}
               onImportChecklist={importLaunchChecklist}
               onToggleChecklist={async (item, completed) => persistItem({ ...item, details: { ...item.details, completed: String(completed) }, updatedAt: new Date().toISOString() })}
-              hasReferencePack={items.some(item => Boolean(item.importKey))} />
+              hasReferencePack={importedPacks.reference} />
           ))}
       </main>
 
@@ -110,10 +133,20 @@ export default function App() {
   )
 }
 
-function Home({ onCreate }: { onCreate: (section?: Section, kind?: ItemKind, body?: string, file?: File) => void }) {
+function Home({ onCreate }: { onCreate: (section?: Section, kind?: ItemKind, body?: string, files?: File[]) => void }) {
   const [text, setText] = useState('')
   const [kind, setKind] = useState<ItemKind>('Note')
+  const [dragging, setDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // The placeholder has always invited a drop, so honour it. Dropped files keep
+  // whatever has been typed so far as the body of the same record.
+  function acceptFiles(files: File[]) {
+    if (!files.length) return
+    const typed = text.trim()
+    onCreate('Library', 'File', typed, files)
+    setText('')
+  }
 
   function save() {
     if (!text.trim()) return
@@ -124,7 +157,10 @@ function Home({ onCreate }: { onCreate: (section?: Section, kind?: ItemKind, bod
   }
 
   return (
-    <section className="home">
+    <section className={dragging ? 'home home-dragging' : 'home'}
+      onDragOver={e => { e.preventDefault(); setDragging(true) }}
+      onDragLeave={e => { if (e.currentTarget === e.target) setDragging(false) }}
+      onDrop={e => { e.preventDefault(); setDragging(false); acceptFiles(Array.from(e.dataTransfer.files)) }}>
       <h1>Home</h1>
       <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Start writing, paste a product link, or drop a file here…" aria-label="Quick capture" />
       <div className="capture-actions">
@@ -132,10 +168,43 @@ function Home({ onCreate }: { onCreate: (section?: Section, kind?: ItemKind, bod
         <button className={kind === 'Link' ? 'capture-tool selected' : 'capture-tool'} onClick={() => setKind('Link')} aria-label="Save link"><Link2 /></button>
         <button className="capture-tool" onClick={() => setKind('File')} aria-label="Add image"><Image /></button>
         <button className="save-button" disabled={!text.trim()} onClick={save}>Save</button>
-        <input ref={fileRef} type="file" hidden accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.html"
-          onChange={e => { const file = e.target.files?.[0]; if (file) { onCreate('Library', 'File', '', file); e.target.value = '' } }} />
+        <input ref={fileRef} type="file" hidden multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.html"
+          onChange={e => { acceptFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
       </div>
       <p>Choose where it belongs after saving.</p>
+    </section>
+  )
+}
+
+function iconForKind(kind: ItemKind) {
+  if (kind === 'Link') return <Link2 size={18} />
+  if (kind === 'File') return <FileIcon size={18} />
+  if (kind === 'Expense' || kind === 'Quote') return <DollarSign size={18} />
+  if (kind === 'Product') return <Package size={18} />
+  if (kind === 'Sample') return <FlaskConical size={18} />
+  if (kind === 'Location') return <MapPin size={18} />
+  if (kind === 'Checklist') return <ListChecks size={18} />
+  return <FileText size={18} />
+}
+
+function GlobalResults({ query, results, onOpen, onClear }: { query: string; results: WorkspaceItem[]; onOpen: (item: WorkspaceItem) => void; onClear: () => void }) {
+  return (
+    <section className="section-page">
+      <div className="section-heading">
+        <div><p className="eyebrow">Search</p><h1>{results.length} {results.length === 1 ? 'result' : 'results'}</h1></div>
+        <div className="section-actions"><button className="minimal-add" onClick={onClear}><X size={16} /> Clear search</button></div>
+      </div>
+      {results.length === 0
+        ? <div className="empty-state"><p>Nothing matches “{query.trim()}”.</p><button onClick={onClear}>Clear search</button></div>
+        : <div className="item-list">
+          {results.map(item => (
+            <button className="item-row" key={item.id} onClick={() => onOpen(item)}>
+              <span className="item-icon">{iconForKind(item.kind)}</span>
+              <span className="item-copy"><strong>{item.title}</strong><small>{item.body}</small></span>
+              <span className="item-meta">{item.status && <em>{item.status}</em>}{item.section}</span>
+            </button>
+          ))}
+        </div>}
     </section>
   )
 }
@@ -143,6 +212,10 @@ function Home({ onCreate }: { onCreate: (section?: Section, kind?: ItemKind, bod
 function SectionPage({ section, items, allItems, query, setQuery, onNew, onNewProduct, onNewSample, onNewLocation, onNewChecklist, onNewQuote, onNewExpense, onOpen, onImport, onImportSamples, onImportLocations, onImportChecklist, onToggleChecklist, hasReferencePack }: { section: Section; items: WorkspaceItem[]; allItems: WorkspaceItem[]; query: string; setQuery: (value: string) => void; onNew: () => void; onNewProduct: () => void; onNewSample: () => void; onNewLocation: () => void; onNewChecklist: () => void; onNewQuote: () => void; onNewExpense: () => void; onOpen: (item: WorkspaceItem) => void; onImport: () => Promise<void>; onImportSamples: () => Promise<void>; onImportLocations: () => Promise<void>; onImportChecklist: () => Promise<void>; onToggleChecklist: (item: WorkspaceItem, completed: boolean) => Promise<void>; hasReferencePack: boolean }) {
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState('')
+  // The checklist widget only exists on Store Setup. A checklist task moved to
+  // any other section has to appear in that section's normal list or it becomes
+  // unreachable.
+  const showsChecklistSeparately = section === 'Store Setup'
   return (
     <section className="section-page">
       <div className="section-heading">
@@ -157,14 +230,20 @@ function SectionPage({ section, items, allItems, query, setQuery, onNew, onNewPr
       {importMessage && <p className="import-message">{importMessage}</p>}
       {section === 'Suppliers' && <SupplierSampleOverview samples={allItems.filter(item => item.kind === 'Sample')} onAdd={onNewSample} onAddStarterPlan={onImportSamples} />}
       {section === 'Store Setup' && <LocationScoutingOverview locations={allItems.filter(item => item.kind === 'Location')} onAdd={onNewLocation} onAddStarterPlan={onImportLocations} />}
+      {section === 'Store Setup' && <EquipmentComparison products={allItems.filter(item => item.kind === 'Product')} onAdd={onNewProduct} onOpen={onOpen} />}
       {section === 'Store Setup' && <LaunchChecklist tasks={items.filter(item => item.kind === 'Checklist')} onAdd={onNewChecklist} onAddStarterPlan={onImportChecklist} onOpen={onOpen} onToggle={onToggleChecklist} />}
       {section === 'Money' && <MoneyOverview records={allItems.filter(item => item.kind === 'Quote' || item.kind === 'Expense')} onAddQuote={onNewQuote} onAddExpense={onNewExpense} />}
       <div className="item-list">
-        {items.filter(item => item.kind !== 'Checklist').length === 0 ? (section === 'Store Setup' ? null : <div className="empty-state"><p>Nothing here yet.</p><button onClick={onNew}>Add the first item</button></div>) : items.filter(item => item.kind !== 'Checklist').map(item => (
+        {items.filter(item => showsChecklistSeparately ? item.kind !== 'Checklist' : true).length === 0
+          ? (query.trim()
+            // A section full of records that simply do not match should not claim to be empty.
+            ? <div className="empty-state"><p>Nothing in {section} matches “{query.trim()}”.</p><button onClick={() => setQuery('')}>Clear search</button></div>
+            : section === 'Store Setup' ? null : <div className="empty-state"><p>Nothing here yet.</p><button onClick={onNew}>Add the first item</button></div>)
+          : items.filter(item => showsChecklistSeparately ? item.kind !== 'Checklist' : true).map(item => (
           <button className="item-row" key={item.id} onClick={() => onOpen(item)}>
-            <span className="item-icon">{item.kind === 'Link' ? <Link2 size={18} /> : item.kind === 'File' ? <FileIcon size={18} /> : item.kind === 'Expense' || item.kind === 'Quote' ? <DollarSign size={18} /> : item.kind === 'Product' ? <Package size={18} /> : item.kind === 'Sample' ? <FlaskConical size={18} /> : item.kind === 'Location' ? <MapPin size={18} /> : item.kind === 'Checklist' ? <ListChecks size={18} /> : <FileText size={18} />}</span>
+            <span className="item-icon">{iconForKind(item.kind)}</span>
             <span className="item-copy"><strong>{item.title}</strong><small>{item.body}</small></span>
-            <span className="item-meta">{item.status && <em>{item.status}</em>}{['Product', 'Sample', 'Expense', 'Quote'].includes(item.kind) && item.amount ? `₹${Number(item.amount).toLocaleString('en-IN')} · ` : ''}{item.area ?? item.section}</span>
+            <span className="item-meta">{item.status && <em>{item.status}</em>}{['Product', 'Sample', 'Expense', 'Quote'].includes(item.kind) && formatRupees(item.amount) ? `${formatRupees(item.amount)} · ` : ''}{item.area ?? item.section}</span>
           </button>
         ))}
       </div>
@@ -179,14 +258,20 @@ function Editor({ item, pendingFiles, onFilesChange, onOpenAttachment, onDeleteA
 }) {
   const [draft, setDraft] = useState(item)
   const [saving, setSaving] = useState(false)
+  // A stray click on the backdrop used to discard everything typed so far.
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(item) || pendingFiles.length > 0
+  function closeWithGuard() {
+    if (isDirty && !window.confirm('Discard your unsaved changes to this record?')) return
+    onClose()
+  }
   const [saveError, setSaveError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [attachmentError, setAttachmentError] = useState('')
   const isExisting = starterItems.some(x => x.id === item.id) || Boolean(item.title)
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop" onMouseDown={closeWithGuard}>
       <form className="editor" onMouseDown={e => e.stopPropagation()} onSubmit={async e => { e.preventDefault(); if (!draft.title.trim()) return; setSaving(true); setSaveError(''); try { await onSave({ ...draft, updatedAt: new Date().toISOString() }, pendingFiles) } catch (reason) { setSaveError(reason instanceof Error ? reason.message : 'Could not save this item.'); setSaving(false) } }}>
-        <div className="editor-top"><span>{isExisting ? 'Edit item' : 'Add to workspace'}</span><button type="button" onClick={onClose}><X size={20} /></button></div>
+        <div className="editor-top"><span>{isExisting ? 'Edit item' : 'Add to workspace'}</span><button type="button" aria-label="Close editor" onClick={closeWithGuard}><X size={20} /></button></div>
         <input className="title-input" autoFocus value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} placeholder="Title" />
         <textarea className="body-input" value={draft.body} onChange={e => setDraft({ ...draft, body: e.target.value })} placeholder="Write anything…" />
         <div className="editor-fields">

@@ -1,4 +1,5 @@
 import { ArrowLeft, Check, DollarSign, ExternalLink, FileText, FlaskConical, ListChecks, MapPin, Package, Paperclip, Pencil } from 'lucide-react'
+import { formatRupees } from '../lib/money'
 import type { WorkspaceItem } from '../types'
 
 type ItemDetailProps = {
@@ -48,17 +49,17 @@ export function ItemDetail({ item, onBack, onEdit, onOpenAttachment }: ItemDetai
 
         {item.kind === 'Product' && <section className="product-summary" aria-label="Product comparison details">
           <div className="product-summary-icon"><Package size={20} /></div>
-          <div><small>Current price / quote</small><strong>{item.amount ? `₹${Number(item.amount).toLocaleString('en-IN')}` : 'Not added yet'}</strong></div>
+          <div><small>Current price / quote</small><strong>{formatRupees(item.amount) ?? 'Not added yet'}</strong></div>
         </section>}
 
         {item.kind === 'Sample' && <section className="product-summary" aria-label="Supplier sample details">
           <div className="product-summary-icon"><FlaskConical size={20} /></div>
-          <div><small>Sample + delivery cost</small><strong>{item.amount ? `₹${Number(item.amount).toLocaleString('en-IN')}` : 'Not added yet'}</strong></div>
+          <div><small>Sample + delivery cost</small><strong>{formatRupees(item.amount) ?? 'Not added yet'}</strong></div>
         </section>}
 
         {item.kind === 'Location' && <section className="product-summary" aria-label="Location scouting details">
           <div className="product-summary-icon"><MapPin size={20} /></div>
-          <div><small>Current monthly rent quote</small><strong>{item.details?.monthlyRent ? `₹${Number(item.details.monthlyRent).toLocaleString('en-IN')}` : 'Not added yet'}</strong></div>
+          <div><small>Current monthly rent quote</small><strong>{formatRupees(item.details?.monthlyRent) ?? 'Not added yet'}</strong></div>
         </section>}
 
         {item.kind === 'Checklist' && <section className="product-summary" aria-label="Checklist status">
@@ -68,7 +69,7 @@ export function ItemDetail({ item, onBack, onEdit, onOpenAttachment }: ItemDetai
 
         {(item.kind === 'Expense' || item.kind === 'Quote') && <section className="product-summary" aria-label="Money record amount">
           <div className="product-summary-icon"><DollarSign size={20} /></div>
-          <div><small>{item.kind === 'Quote' ? 'Quoted amount' : 'Expense amount'}</small><strong>{item.amount ? `₹${Number(item.amount).toLocaleString('en-IN')}` : 'Not added yet'}</strong></div>
+          <div><small>{item.kind === 'Quote' ? 'Quoted amount' : 'Expense amount'}</small><strong>{formatRupees(item.amount) ?? 'Not added yet'}</strong></div>
         </section>}
 
         {details.length > 0 && <dl className="detail-grid">

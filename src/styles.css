@@ -15,7 +15,7 @@ button { cursor: pointer; }
 .icon-button, .mobile-menu { border: 0; background: transparent; padding: 6px; display: grid; place-items: center; }
 .mobile-menu { display: none; }
 .avatar { width: 44px; height: 44px; border: 0; border-radius: 50%; background: #cc8b48; color: white; font-size: 17px; }
-.global-search { position: fixed; z-index: 20; top: 20px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 40px)); height: 50px; background: white; border: 1px solid #ded8d1; box-shadow: 0 10px 35px rgba(42,29,18,.1); display: flex; align-items: center; gap: 12px; padding: 0 16px; border-radius: 8px; }
+.global-search { position: fixed; z-index: 20; top: 100px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 40px)); height: 50px; background: white; border: 1px solid #ded8d1; box-shadow: 0 10px 35px rgba(42,29,18,.1); display: flex; align-items: center; gap: 12px; padding: 0 16px; border-radius: 8px; }
 .global-search input { flex: 1; border: 0; outline: none; background: transparent; }
 .global-search button { border: 0; background: none; display: grid; }
 .home { width: min(760px, calc(100% - 40px)); margin: 135px auto 0; text-align: center; }
@@ -30,7 +30,7 @@ button { cursor: pointer; }
 .save-button:disabled { opacity: .45; cursor: default; }
 .home > p { color: #837a74; font-size: 14px; margin-top: 36px; }
 .section-page { width: min(900px, calc(100% - 48px)); margin: 80px auto 100px; }
-.section-heading { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 38px; }
+.section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 38px; }
 .section-heading h1 { font-size: 30px; font-weight: 500; margin: 5px 0 0; }
 .section-actions { display: flex; align-items: center; gap: 24px; }
 .eyebrow { color: #8c8179; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin: 0; }
@@ -92,13 +92,26 @@ button { cursor: pointer; }
 .money-overview > header strong { font-size: 14px; font-weight: 500; }
 .money-actions { display: flex; gap: 18px; }
 .money-actions button { border: 0; background: none; color: #9b5b29; display: inline-flex; align-items: center; gap: 6px; padding: 6px 0; }
-.money-totals { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 20px; border-top: 1px solid #ebe5df; }
+.money-totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 20px; border-top: 1px solid #ebe5df; }
 .money-totals > div { display: grid; gap: 6px; padding: 20px 0 4px; }
 .money-totals > div + div { padding-left: 28px; border-left: 1px solid #ebe5df; }
 .money-totals span { color: #8a8078; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
 .money-totals strong { font-size: 24px; font-weight: 500; }
 .money-totals small, .money-overview > p { color: #8a817a; font-size: 11px; }
 .money-overview > p { margin: 18px 0 0; }
+.equipment-comparison { border: 1px solid #ebe5df; border-radius: 8px; padding: 20px 22px 8px; margin-bottom: 26px; }
+.equipment-comparison > header { display: flex; align-items: center; justify-content: space-between; }
+.equipment-comparison > header div { display: flex; align-items: center; gap: 9px; }
+.equipment-comparison > header button { display: flex; align-items: center; gap: 6px; border: 0; background: none; color: #a55f27; font-size: 13px; }
+.comparison-group { margin-top: 20px; }
+.comparison-group h3 { font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; color: #8a8078; margin: 0 0 8px; }
+.comparison-group h3 span { text-transform: none; letter-spacing: 0; color: #a9a09a; }
+.comparison-scroll { overflow-x: auto; }
+.comparison-scroll table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 13px; }
+.comparison-scroll th { text-align: left; font-weight: 400; color: #8a8078; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 0 14px 8px 0; }
+.comparison-scroll td { padding: 10px 14px 10px 0; border-top: 1px solid #f0ebe5; vertical-align: top; color: #6f6660; }
+.comparison-scroll td button { border: 0; background: none; padding: 0; text-align: left; color: #2f2721; font-size: 13px; }
+.home-dragging { outline: 2px dashed #d3a877; outline-offset: 18px; border-radius: 6px; }
 .empty-state { text-align: center; padding: 100px 20px; color: #877d75; }
 .empty-state button { border: 0; background: none; color: #a55f27; }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(40,30,22,.12); z-index: 30; display: flex; justify-content: flex-end; }
@@ -151,6 +164,7 @@ button { cursor: pointer; }
 .auth-error { color: #a75145; font-size: 13px; margin: -8px 0 0; }
 .workspace-loading { min-height: calc(100vh - 88px); display: grid; place-items: center; color: #837970; }
 .workspace-error { position: fixed; left: 50%; top: 104px; transform: translateX(-50%); z-index: 15; background: #fff7f3; color: #954f43; border: 1px solid #ead2cb; border-radius: 5px; padding: 10px 14px; font-size: 13px; }
+.workspace-offline { max-width: 720px; margin: 0 auto 20px; background: #fdf8ef; color: #7a5a2e; border: 1px solid #ecdcc2; border-radius: 5px; padding: 10px 14px; font-size: 13px; text-align: center; }
 
 .detail-page { width: min(900px, calc(100% - 48px)); margin: 58px auto 110px; }
 .detail-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 72px; }
@@ -206,7 +220,9 @@ button { cursor: pointer; }
   .capture-actions { gap: 15px; }
   .save-button { margin-left: 12px; padding: 11px 24px; }
   .section-page { margin-top: 48px; }
-  .section-actions { gap: 14px; }
+  .global-search { top: 84px; }
+  .section-heading { align-items: flex-start; flex-direction: column; gap: 14px; margin-bottom: 28px; }
+  .section-actions { gap: 14px; flex-wrap: wrap; }
   .item-meta { display: none; }
   .editor { padding: 28px 24px; }
   .editor-fields { grid-template-columns: 1fr; }
@@ -218,6 +234,8 @@ button { cursor: pointer; }
   .sample-overview button { grid-column: 1 / -1; justify-content: center; }
   .launch-checklist { padding: 18px 16px 8px; }
   .launch-checklist > header div { gap: 10px; }
+  .equipment-comparison { padding: 18px 16px 8px; }
+  .equipment-comparison > header { align-items: flex-start; flex-direction: column; gap: 12px; }
   .money-overview > header { align-items: flex-start; flex-direction: column; }
   .money-actions { width: 100%; justify-content: space-between; }
   .money-totals { grid-template-columns: 1fr; }

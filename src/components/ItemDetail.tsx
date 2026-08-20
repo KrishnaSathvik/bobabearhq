@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, ExternalLink, FileText, FlaskConical, ListChecks, MapPin, Package, Paperclip, Pencil } from 'lucide-react'
+import { ArrowLeft, Check, DollarSign, ExternalLink, FileText, FlaskConical, ListChecks, MapPin, Package, Paperclip, Pencil } from 'lucide-react'
 import type { WorkspaceItem } from '../types'
 
 type ItemDetailProps = {
@@ -18,6 +18,9 @@ const detailLabels: Record<string, string> = {
   parking: 'Parking / access', utilities: 'Water / power / drainage', deliveryAccess: 'Delivery pickup access',
   pros: 'Pros', concerns: 'Concerns',
   phase: 'Phase', completed: 'Completed',
+  vendor: 'Vendor / paid to', date: 'Date', validUntil: 'Valid until', taxDelivery: 'Tax / delivery',
+  expenseType: 'Record type', paymentStatus: 'Payment status', paymentMethod: 'Payment method',
+  referenceNumber: 'Receipt / invoice number',
 }
 
 export function ItemDetail({ item, onBack, onEdit, onOpenAttachment }: ItemDetailProps) {
@@ -63,11 +66,16 @@ export function ItemDetail({ item, onBack, onEdit, onOpenAttachment }: ItemDetai
           <div><small>Task status</small><strong>{item.details?.completed === 'true' ? 'Completed' : 'Not completed'}</strong></div>
         </section>}
 
+        {(item.kind === 'Expense' || item.kind === 'Quote') && <section className="product-summary" aria-label="Money record amount">
+          <div className="product-summary-icon"><DollarSign size={20} /></div>
+          <div><small>{item.kind === 'Quote' ? 'Quoted amount' : 'Expense amount'}</small><strong>{item.amount ? `₹${Number(item.amount).toLocaleString('en-IN')}` : 'Not added yet'}</strong></div>
+        </section>}
+
         {details.length > 0 && <dl className="detail-grid">
           {details.map(([key, value]) => <div key={key}><dt>{detailLabels[key] ?? key}</dt><dd>{value}</dd></div>)}
         </dl>}
 
-        {isWebLink && <a className="primary-link" href={item.url} target="_blank" rel="noreferrer">{item.kind === 'Location' ? 'Open map or listing' : item.kind === 'Sample' ? 'Open supplier product page' : 'Open product page'} <ExternalLink size={16} /></a>}
+        {isWebLink && <a className="primary-link" href={item.url} target="_blank" rel="noreferrer">{item.kind === 'Location' ? 'Open map or listing' : item.kind === 'Sample' ? 'Open supplier product page' : item.kind === 'Expense' || item.kind === 'Quote' ? 'Open reference link' : 'Open product page'} <ExternalLink size={16} /></a>}
 
         {item.kind === 'File' && !isWebLink && item.url && <section className="file-reference"><FileText size={19} /><div><small>Referenced file</small><strong>{item.url}</strong></div></section>}
 

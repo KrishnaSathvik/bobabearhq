@@ -86,6 +86,19 @@ button { cursor: pointer; }
 .product-fields select { min-width: 0; border: 0; border-bottom: 1px solid #ddd5cc; background: transparent; outline: 0; padding: 10px 0; }
 .completed-field { display: flex !important; grid-auto-flow: column; align-items: center; justify-content: start; align-self: end; padding: 10px 0; }
 .completed-field input { width: 16px; height: 16px; accent-color: #b8753b; }
+.money-overview { margin: 24px 0 30px; padding: 20px 22px; border: 1px solid #e8dfd6; border-radius: 12px; background: #fffdfa; }
+.money-overview > header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.money-overview > header > div:first-child { display: inline-flex; align-items: center; gap: 8px; }
+.money-overview > header strong { font-size: 14px; font-weight: 500; }
+.money-actions { display: flex; gap: 18px; }
+.money-actions button { border: 0; background: none; color: #9b5b29; display: inline-flex; align-items: center; gap: 6px; padding: 6px 0; }
+.money-totals { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 20px; border-top: 1px solid #ebe5df; }
+.money-totals > div { display: grid; gap: 6px; padding: 20px 0 4px; }
+.money-totals > div + div { padding-left: 28px; border-left: 1px solid #ebe5df; }
+.money-totals span { color: #8a8078; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.money-totals strong { font-size: 24px; font-weight: 500; }
+.money-totals small, .money-overview > p { color: #8a817a; font-size: 11px; }
+.money-overview > p { margin: 18px 0 0; }
 .empty-state { text-align: center; padding: 100px 20px; color: #877d75; }
 .empty-state button { border: 0; background: none; color: #a55f27; }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(40,30,22,.12); z-index: 30; display: flex; justify-content: flex-end; }
@@ -196,6 +209,10 @@ button { cursor: pointer; }
   .sample-overview button { grid-column: 1 / -1; justify-content: center; }
   .launch-checklist { padding: 18px 16px 8px; }
   .launch-checklist > header div { gap: 10px; }
+  .money-overview > header { align-items: flex-start; flex-direction: column; }
+  .money-actions { width: 100%; justify-content: space-between; }
+  .money-totals { grid-template-columns: 1fr; }
+  .money-totals > div + div { padding-left: 0; border-left: 0; }
   .detail-page { width: min(100% - 36px, 900px); margin-top: 30px; }
   .detail-toolbar { margin-bottom: 48px; }
   .detail-heading h1 { font-size: 34px; }

@@ -1,6 +1,6 @@
 export type Section = 'Notes' | 'Menu' | 'Suppliers' | 'Store Setup' | 'Marketing' | 'Money' | 'Library'
 
-export type ItemKind = 'Note' | 'Link' | 'File' | 'Expense' | 'Product' | 'Sample' | 'Location' | 'Checklist'
+export type ItemKind = 'Note' | 'Link' | 'File' | 'Expense' | 'Quote' | 'Product' | 'Sample' | 'Location' | 'Checklist'
 export type ItemStatus = 'Reference' | 'Researching' | 'Sample needed' | 'Requested' | 'Ordered' | 'Received' | 'Testing' | 'Visited' | 'Shortlisted' | 'Selected' | 'Not selected'
 
 export type WorkspaceAttachment = {

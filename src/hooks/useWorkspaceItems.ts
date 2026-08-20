@@ -87,6 +87,10 @@ export function useWorkspaceItems() {
   }, [])
 
   useEffect(() => {
+    // This effect is the one legitimate case the rule describes: it synchronises
+    // React with an external system (Supabase auth, the workspace row, and the
+    // realtime channel). The state it sets cannot be derived during render.
+    // oxlint-disable-next-line react/set-state-in-effect
     if (!supabase) { setLoading(false); return }
     let active = true
     let channel: ReturnType<typeof supabase.channel> | null = null

@@ -19,7 +19,7 @@ function matchItems(pool: WorkspaceItem[], rawQuery: string) {
   const needle = rawQuery.trim().toLowerCase()
   if (!needle) return pool
   return pool.filter(item => [
-    ...[item.title, item.body, item.section, item.area, item.url, item.status, item.source],
+    item.title, item.body, item.section, item.area, item.url, item.status, item.source,
     ...Object.values(item.details ?? {}),
   ].some(value => value?.toLowerCase().includes(needle)))
 }

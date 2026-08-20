@@ -57,9 +57,16 @@ button { cursor: pointer; }
 .editor-fields label { display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #81766e; }
 .editor-fields select { border: 0; border-bottom: 1px solid #ddd5cc; background: transparent; padding: 7px 0; outline: 0; }
 .url-input { border-bottom: 1px solid #ddd5cc; padding: 13px 0; margin-top: 22px; }
+.amount-field { display: flex; flex-direction: column; gap: 8px; color: #81766e; font-size: 12px; margin-top: 22px; }
+.amount-field input { border: 0; border-bottom: 1px solid #ddd5cc; background: transparent; outline: 0; padding: 10px 0; font-size: 16px; }
+.attachment-area { margin-top: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: #7b7169; font-size: 13px; }
+.attachment-picker, .attachment-area button { border: 0; background: #f6f0e9; color: #8f582d; border-radius: 5px; padding: 9px 11px; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.attachment-area button { text-decoration: underline; text-underline-offset: 3px; }
 .editor-bottom { margin-top: auto; display: flex; justify-content: space-between; align-items: center; }
 .editor-bottom .save-button { margin-left: 0; }
 .delete-button { color: #a65e50; background: none; border: 0; }
+.delete-confirm { display: flex; align-items: center; gap: 10px; }
+.delete-confirm button { border: 0; background: none; font-size: 13px; }
 .auth-loading { min-height: 100vh; display: grid; place-items: center; color: #7f756e; }
 .login-page { min-height: 100vh; display: grid; place-items: center; padding: 28px; }
 .login-card { width: min(390px, 100%); }

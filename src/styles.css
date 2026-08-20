@@ -44,6 +44,13 @@ button { cursor: pointer; }
 .item-copy strong { font-size: 16px; font-weight: 500; }
 .item-copy small { color: #807771; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item-meta { color: #8a817a; font-size: 13px; padding-left: 24px; }
+.item-meta em { display: block; width: max-content; margin: 0 0 6px auto; padding: 3px 8px; border-radius: 999px; background: #f6eee5; color: #8b5a2b; font-size: 10px; font-style: normal; font-weight: 600; letter-spacing: .02em; }
+.reference-import { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 4px 0 28px; padding: 20px 22px; border: 1px solid #eadfd3; border-radius: 14px; background: #fffdfa; }
+.reference-import strong { font-size: 15px; }
+.reference-import p { margin: 5px 0 0; color: #766f69; font-size: 13px; }
+.reference-import button { flex: 0 0 auto; border: 0; border-radius: 8px; padding: 10px 15px; background: #b9783d; color: white; }
+.reference-import button:disabled { opacity: .6; cursor: wait; }
+.import-message { margin: -14px 0 22px; color: #6b655f; font-size: 13px; }
 .empty-state { text-align: center; padding: 100px 20px; color: #877d75; }
 .empty-state button { border: 0; background: none; color: #a55f27; }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(40,30,22,.12); z-index: 30; display: flex; justify-content: flex-end; }
@@ -53,12 +60,14 @@ button { cursor: pointer; }
 .title-input, .body-input, .url-input { border: 0; background: transparent; outline: 0; width: 100%; }
 .title-input { font-size: 29px; font-weight: 500; margin-bottom: 24px; }
 .body-input { font-size: 16px; line-height: 1.65; resize: none; min-height: 220px; }
-.editor-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; border-top: 1px solid #e8e2db; padding-top: 24px; }
+.editor-fields { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 12px; border-top: 1px solid #e8e2db; padding-top: 24px; }
 .editor-fields label { display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #81766e; }
 .editor-fields select { border: 0; border-bottom: 1px solid #ddd5cc; background: transparent; padding: 7px 0; outline: 0; }
 .url-input { border-bottom: 1px solid #ddd5cc; padding: 13px 0; margin-top: 22px; }
 .amount-field { display: flex; flex-direction: column; gap: 8px; color: #81766e; font-size: 12px; margin-top: 22px; }
 .amount-field input { border: 0; border-bottom: 1px solid #ddd5cc; background: transparent; outline: 0; padding: 10px 0; font-size: 16px; }
+.source-field { display: grid; gap: 8px; color: #81766e; font-size: 12px; margin-top: 20px; }
+.source-field input { border: 0; border-bottom: 1px solid #ddd5cc; background: transparent; outline: 0; padding: 10px 0; }
 .attachment-area { margin-top: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: #7b7169; font-size: 13px; }
 .attachment-picker, .attachment-area button { border: 0; background: #f6f0e9; color: #8f582d; border-radius: 5px; padding: 9px 11px; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
 .attachment-area button { text-decoration: underline; text-underline-offset: 3px; }
@@ -106,4 +115,6 @@ button { cursor: pointer; }
   .item-meta { display: none; }
   .editor { padding: 28px 24px; }
   .editor-fields { grid-template-columns: 1fr; }
+  .reference-import { align-items: flex-start; flex-direction: column; }
+  .reference-import button { width: 100%; }
 }

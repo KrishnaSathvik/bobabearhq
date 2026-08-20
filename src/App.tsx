@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { DollarSign, File as FileIcon, FileText, Image, Link2, Menu as MenuIcon, Paperclip, Plus, Search, X } from 'lucide-react'
 import { sectionAreas, starterItems } from './data'
 import { useWorkspaceItems } from './hooks/useWorkspaceItems'
-import type { ItemKind, Section, WorkspaceItem } from './types'
+import type { ItemKind, ItemStatus, Section, WorkspaceItem } from './types'
 
 const sections: Array<'Home' | Section> = ['Home', 'Notes', 'Menu', 'Suppliers', 'Store Setup', 'Marketing', 'Money', 'Library']
 
@@ -12,7 +12,7 @@ function createId() {
 
 export default function App() {
   const [active, setActive] = useState<'Home' | Section>('Home')
-  const { items, loading, error, saveItem: persistItem, deleteItem: persistDelete, getAttachmentUrl } = useWorkspaceItems()
+  const { items, loading, error, saveItem: persistItem, deleteItem: persistDelete, getAttachmentUrl, importReferencePack } = useWorkspaceItems()
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -23,7 +23,7 @@ export default function App() {
     const base = items.filter(item => item.section === active)
     const needle = query.trim().toLowerCase()
     if (!needle) return base
-    return base.filter(item => [item.title, item.body, item.section, item.area, item.url].some(value => value?.toLowerCase().includes(needle)))
+    return base.filter(item => [item.title, item.body, item.section, item.area, item.url, item.status, item.source].some(value => value?.toLowerCase().includes(needle)))
   }, [active, items, query])
 
   async function saveItem(item: WorkspaceItem, file?: File) {
@@ -72,7 +72,7 @@ export default function App() {
         {error && <div className="workspace-error" role="alert">{error}</div>}
         {loading && <div className="workspace-loading">Opening your workspace…</div>}
         {!loading && (active === 'Home' ? <Home onCreate={openNew} /> : (
-          <SectionPage section={active} items={visibleItems} query={query} setQuery={setQuery} onNew={() => openNew(active)} onEdit={item => { setEditing(item); setComposerOpen(true) }} />
+          <SectionPage section={active} items={visibleItems} query={query} setQuery={setQuery} onNew={() => openNew(active)} onEdit={item => { setEditing(item); setComposerOpen(true) }} onImport={importReferencePack} hasReferencePack={items.some(item => Boolean(item.importKey))} />
         ))}
       </main>
 
@@ -114,7 +114,9 @@ function Home({ onCreate }: { onCreate: (section?: Section, kind?: ItemKind, bod
   )
 }
 
-function SectionPage({ section, items, query, setQuery, onNew, onEdit }: { section: Section; items: WorkspaceItem[]; query: string; setQuery: (value: string) => void; onNew: () => void; onEdit: (item: WorkspaceItem) => void }) {
+function SectionPage({ section, items, query, setQuery, onNew, onEdit, onImport, hasReferencePack }: { section: Section; items: WorkspaceItem[]; query: string; setQuery: (value: string) => void; onNew: () => void; onEdit: (item: WorkspaceItem) => void; onImport: () => Promise<void>; hasReferencePack: boolean }) {
+  const [importing, setImporting] = useState(false)
+  const [importMessage, setImportMessage] = useState('')
   return (
     <section className="section-page">
       <div className="section-heading">
@@ -122,12 +124,17 @@ function SectionPage({ section, items, query, setQuery, onNew, onEdit }: { secti
         <button className="minimal-add" onClick={onNew}><Plus size={17} /> Add</button>
       </div>
       <div className="section-search"><Search size={18} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Search ${section.toLowerCase()}…`} /></div>
+      {section === 'Library' && !hasReferencePack && <div className="reference-import">
+        <div><strong>Bring in the Boba Bear reference pack</strong><p>Add the useful parts of your existing documents across every tab. Nothing will be marked as final.</p></div>
+        <button disabled={importing} onClick={async () => { setImporting(true); setImportMessage(''); try { await onImport(); setImportMessage('Reference pack added.') } catch (reason) { setImportMessage(reason instanceof Error ? reason.message : 'Could not import the reference pack.') } finally { setImporting(false) } }}>{importing ? 'Adding…' : 'Add references'}</button>
+      </div>}
+      {importMessage && <p className="import-message">{importMessage}</p>}
       <div className="item-list">
         {items.length === 0 ? <div className="empty-state"><p>Nothing here yet.</p><button onClick={onNew}>Add the first item</button></div> : items.map(item => (
           <button className="item-row" key={item.id} onClick={() => onEdit(item)}>
             <span className="item-icon">{item.kind === 'Link' ? <Link2 size={18} /> : item.kind === 'File' ? <FileIcon size={18} /> : item.kind === 'Expense' ? <DollarSign size={18} /> : <FileText size={18} />}</span>
             <span className="item-copy"><strong>{item.title}</strong><small>{item.body}</small></span>
-            <span className="item-meta">{item.area ?? item.section}</span>
+            <span className="item-meta">{item.status && <em>{item.status}</em>}{item.area ?? item.section}</span>
           </button>
         ))}
       </div>
@@ -155,9 +162,11 @@ function Editor({ item, pendingFile, onFileChange, onOpenAttachment, onClose, on
           <label>Type<select value={draft.kind} onChange={e => setDraft({ ...draft, kind: e.target.value as ItemKind })}><option>Note</option><option>Link</option><option>File</option><option>Expense</option></select></label>
           <label>Belongs to<select value={draft.section} onChange={e => setDraft({ ...draft, section: e.target.value as Section, area: '' })}>{sections.filter(s => s !== 'Home').map(s => <option key={s}>{s}</option>)}</select></label>
           <label>Area<select value={draft.area ?? ''} onChange={e => setDraft({ ...draft, area: e.target.value })}><option value="">Choose later</option>{sectionAreas[draft.section]?.map(area => <option key={area}>{area}</option>)}</select></label>
+          <label>Status<select value={draft.status ?? ''} onChange={e => setDraft({ ...draft, status: (e.target.value || undefined) as ItemStatus | undefined })}><option value="">Not set</option><option>Reference</option><option>Researching</option><option>Sample needed</option><option>Testing</option><option>Selected</option><option>Not selected</option></select></label>
         </div>
         {(draft.kind === 'Link' || draft.kind === 'File') && <input className="url-input" value={draft.url ?? ''} onChange={e => setDraft({ ...draft, url: e.target.value })} placeholder="Paste link or file reference" />}
         {draft.kind === 'Expense' && <label className="amount-field">Amount (₹)<input type="number" min="0" step="0.01" value={draft.amount ?? ''} onChange={e => setDraft({ ...draft, amount: e.target.value })} placeholder="0.00" /></label>}
+        <label className="source-field">Source / reference<input value={draft.source ?? ''} onChange={e => setDraft({ ...draft, source: e.target.value })} placeholder="Optional document, conversation, or website" /></label>
         {draft.kind === 'File' && <div className="attachment-area">
           <label className="attachment-picker"><Paperclip size={16} />{pendingFile ? 'Change file' : 'Choose file'}<input type="file" hidden onChange={e => onFileChange(e.target.files?.[0] ?? null)} /></label>
           {pendingFile && <span>{pendingFile.name}</span>}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { starterItems } from '../data'
+import { referenceCatalog } from '../referenceCatalog'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import type { WorkspaceAttachment, WorkspaceItem } from '../types'
 
@@ -12,6 +13,9 @@ type ItemRow = {
   area: string | null
   url: string | null
   amount: number | null
+  status: WorkspaceItem['status'] | null
+  source: string | null
+  import_key: string | null
   created_at: string
   updated_at: string
 }
@@ -28,7 +32,9 @@ type AttachmentRow = {
 function fromRow(row: ItemRow): WorkspaceItem {
   return { id: row.id, title: row.title, body: row.body, kind: row.kind, section: row.section,
     area: row.area ?? undefined, url: row.url ?? undefined,
-    amount: row.amount == null ? undefined : String(row.amount), createdAt: row.created_at, updatedAt: row.updated_at }
+    amount: row.amount == null ? undefined : String(row.amount), status: row.status ?? undefined,
+    source: row.source ?? undefined, importKey: row.import_key ?? undefined,
+    createdAt: row.created_at, updatedAt: row.updated_at }
 }
 
 function loadLocalItems() {
@@ -110,6 +116,7 @@ export function useWorkspaceItems() {
     const record = { id: item.id, workspace_id: workspaceId, title: item.title, body: item.body,
       kind: item.kind, section: item.section, area: item.area ?? null, url: item.url ?? null,
       amount: item.amount ? Number(item.amount) : null, created_by: authData.user.id,
+      status: item.status ?? null, source: item.source ?? null, import_key: item.importKey ?? null,
       created_at: item.createdAt, updated_at: new Date().toISOString() }
     const { error: saveError } = await supabase.from('items').upsert(record)
     if (saveError) throw saveError
@@ -149,5 +156,31 @@ export function useWorkspaceItems() {
     return data.signedUrl
   }
 
-  return { items, loading, error, saveItem, deleteItem, getAttachmentUrl }
+  async function importReferencePack() {
+    const now = new Date().toISOString()
+    if (!supabase || !workspaceId) {
+      setItems(current => {
+        const existingKeys = new Set(current.map(item => item.importKey).filter(Boolean))
+        const additions = referenceCatalog.filter(item => !existingKeys.has(item.importKey)).map(item => ({
+          ...item, id: crypto.randomUUID(), createdAt: now, updatedAt: now,
+        }))
+        return [...additions, ...current]
+      })
+      return
+    }
+    const { data: authData } = await supabase.auth.getUser()
+    if (!authData.user) throw new Error('Please sign in again.')
+    const records = referenceCatalog.map(item => ({
+      id: crypto.randomUUID(), workspace_id: workspaceId, title: item.title, body: item.body,
+      kind: item.kind, section: item.section, area: item.area ?? null, url: item.url ?? null,
+      amount: item.amount ? Number(item.amount) : null, status: item.status ?? null,
+      source: item.source ?? null, import_key: item.importKey, created_by: authData.user!.id,
+      created_at: now, updated_at: now,
+    }))
+    const { error: importError } = await supabase.from('items').upsert(records, { onConflict: 'workspace_id,import_key', ignoreDuplicates: true })
+    if (importError) throw importError
+    await loadRemoteItems(workspaceId)
+  }
+
+  return { items, loading, error, saveItem, deleteItem, getAttachmentUrl, importReferencePack }
 }

@@ -1,14 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { FileText, Image, Link2, Menu as MenuIcon, Paperclip, Plus, Search, X } from 'lucide-react'
 import { sectionAreas, starterItems } from './data'
+import { useWorkspaceItems } from './hooks/useWorkspaceItems'
 import type { ItemKind, Section, WorkspaceItem } from './types'
 
 const sections: Array<'Home' | Section> = ['Home', 'Notes', 'Menu', 'Suppliers', 'Store Setup', 'Marketing', 'Money', 'Library']
-
-function loadItems() {
-  const stored = localStorage.getItem('boba-bear-items')
-  return stored ? (JSON.parse(stored) as WorkspaceItem[]) : starterItems
-}
 
 function createId() {
   return `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
@@ -16,14 +12,12 @@ function createId() {
 
 export default function App() {
   const [active, setActive] = useState<'Home' | Section>('Home')
-  const [items, setItems] = useState<WorkspaceItem[]>(loadItems)
+  const { items, loading, error, saveItem: persistItem, deleteItem: persistDelete } = useWorkspaceItems()
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [editing, setEditing] = useState<WorkspaceItem | null>(null)
   const [composerOpen, setComposerOpen] = useState(false)
-
-  useEffect(() => localStorage.setItem('boba-bear-items', JSON.stringify(items)), [items])
 
   const visibleItems = useMemo(() => {
     const base = active === 'Notes' ? items : items.filter(item => item.section === active)
@@ -32,10 +26,8 @@ export default function App() {
     return base.filter(item => [item.title, item.body, item.section, item.area, item.url].some(value => value?.toLowerCase().includes(needle)))
   }, [active, items, query])
 
-  function saveItem(item: WorkspaceItem) {
-    setItems(current => current.some(existing => existing.id === item.id)
-      ? current.map(existing => existing.id === item.id ? item : existing)
-      : [item, ...current])
+  async function saveItem(item: WorkspaceItem) {
+    await persistItem(item)
     setComposerOpen(false)
     setEditing(null)
   }
@@ -73,12 +65,14 @@ export default function App() {
       )}
 
       <main>
-        {active === 'Home' ? <Home onCreate={openNew} /> : (
+        {error && <div className="workspace-error" role="alert">{error}</div>}
+        {loading && <div className="workspace-loading">Opening your workspace…</div>}
+        {!loading && (active === 'Home' ? <Home onCreate={openNew} /> : (
           <SectionPage section={active} items={visibleItems} query={query} setQuery={setQuery} onNew={() => openNew(active)} onEdit={item => { setEditing(item); setComposerOpen(true) }} />
-        )}
+        ))}
       </main>
 
-      {composerOpen && editing && <Editor item={editing} onClose={() => { setComposerOpen(false); setEditing(null) }} onSave={saveItem} onDelete={() => { setItems(current => current.filter(item => item.id !== editing.id)); setComposerOpen(false); setEditing(null) }} />}
+      {composerOpen && editing && <Editor item={editing} onClose={() => { setComposerOpen(false); setEditing(null) }} onSave={saveItem} onDelete={async () => { await persistDelete(editing.id); setComposerOpen(false); setEditing(null) }} />}
     </div>
   )
 }
@@ -131,12 +125,14 @@ function SectionPage({ section, items, query, setQuery, onNew, onEdit }: { secti
   )
 }
 
-function Editor({ item, onClose, onSave, onDelete }: { item: WorkspaceItem; onClose: () => void; onSave: (item: WorkspaceItem) => void; onDelete: () => void }) {
+function Editor({ item, onClose, onSave, onDelete }: { item: WorkspaceItem; onClose: () => void; onSave: (item: WorkspaceItem) => Promise<void>; onDelete: () => Promise<void> }) {
   const [draft, setDraft] = useState(item)
-  const isExisting = starterItems.some(x => x.id === item.id) || Boolean(localStorage.getItem('boba-bear-items')?.includes(item.id))
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const isExisting = starterItems.some(x => x.id === item.id) || Boolean(item.title)
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <form className="editor" onMouseDown={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); if (!draft.title.trim()) return; onSave({ ...draft, updatedAt: new Date().toISOString() }) }}>
+      <form className="editor" onMouseDown={e => e.stopPropagation()} onSubmit={async e => { e.preventDefault(); if (!draft.title.trim()) return; setSaving(true); setSaveError(''); try { await onSave({ ...draft, updatedAt: new Date().toISOString() }) } catch (reason) { setSaveError(reason instanceof Error ? reason.message : 'Could not save this item.'); setSaving(false) } }}>
         <div className="editor-top"><span>{isExisting ? 'Edit item' : 'Add to workspace'}</span><button type="button" onClick={onClose}><X size={20} /></button></div>
         <input className="title-input" autoFocus value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} placeholder="Title" />
         <textarea className="body-input" value={draft.body} onChange={e => setDraft({ ...draft, body: e.target.value })} placeholder="Write anything…" />
@@ -146,7 +142,8 @@ function Editor({ item, onClose, onSave, onDelete }: { item: WorkspaceItem; onCl
           <label>Area<select value={draft.area ?? ''} onChange={e => setDraft({ ...draft, area: e.target.value })}><option value="">Choose later</option>{sectionAreas[draft.section]?.map(area => <option key={area}>{area}</option>)}</select></label>
         </div>
         {(draft.kind === 'Link' || draft.kind === 'File') && <input className="url-input" value={draft.url ?? ''} onChange={e => setDraft({ ...draft, url: e.target.value })} placeholder="Paste link or file reference" />}
-        <div className="editor-bottom">{isExisting ? <button type="button" className="delete-button" onClick={onDelete}>Delete</button> : <span />}<button className="save-button" disabled={!draft.title.trim()}>Save</button></div>
+        {saveError && <p className="auth-error" role="alert">{saveError}</p>}
+        <div className="editor-bottom">{isExisting ? <button type="button" className="delete-button" onClick={onDelete}>Delete</button> : <span />}<button className="save-button" disabled={!draft.title.trim() || saving}>{saving ? 'Saving…' : 'Save'}</button></div>
       </form>
     </div>
   )

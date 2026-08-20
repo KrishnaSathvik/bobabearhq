@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, FileText, Package, Paperclip, Pencil } from 'lucide-react'
+import { ArrowLeft, ExternalLink, FileText, FlaskConical, Package, Paperclip, Pencil } from 'lucide-react'
 import type { WorkspaceItem } from '../types'
 
 type ItemDetailProps = {
@@ -11,6 +11,8 @@ type ItemDetailProps = {
 const detailLabels: Record<string, string> = {
   category: 'Category', supplier: 'Supplier', model: 'Model / size', moq: 'MOQ',
   leadTime: 'Lead time', delivery: 'Delivery', warranty: 'Warranty / service',
+  requestedDate: 'Requested date', receivedDate: 'Received date', labelCheck: 'Label / FSSAI check',
+  tasteScore: 'Taste score',
 }
 
 export function ItemDetail({ item, onBack, onEdit, onOpenAttachment }: ItemDetailProps) {
@@ -41,11 +43,16 @@ export function ItemDetail({ item, onBack, onEdit, onOpenAttachment }: ItemDetai
           <div><small>Current price / quote</small><strong>{item.amount ? `₹${Number(item.amount).toLocaleString('en-IN')}` : 'Not added yet'}</strong></div>
         </section>}
 
+        {item.kind === 'Sample' && <section className="product-summary" aria-label="Supplier sample details">
+          <div className="product-summary-icon"><FlaskConical size={20} /></div>
+          <div><small>Sample + delivery cost</small><strong>{item.amount ? `₹${Number(item.amount).toLocaleString('en-IN')}` : 'Not added yet'}</strong></div>
+        </section>}
+
         {details.length > 0 && <dl className="detail-grid">
           {details.map(([key, value]) => <div key={key}><dt>{detailLabels[key] ?? key}</dt><dd>{value}</dd></div>)}
         </dl>}
 
-        {isWebLink && <a className="primary-link" href={item.url} target="_blank" rel="noreferrer">Open product page <ExternalLink size={16} /></a>}
+        {isWebLink && <a className="primary-link" href={item.url} target="_blank" rel="noreferrer">{item.kind === 'Sample' ? 'Open supplier product page' : 'Open product page'} <ExternalLink size={16} /></a>}
 
         {item.kind === 'File' && !isWebLink && item.url && <section className="file-reference"><FileText size={19} /><div><small>Referenced file</small><strong>{item.url}</strong></div></section>}
 

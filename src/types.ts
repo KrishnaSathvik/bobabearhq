@@ -1,7 +1,7 @@
 export type Section = 'Notes' | 'Menu' | 'Suppliers' | 'Store Setup' | 'Marketing' | 'Money' | 'Library'
 
-export type ItemKind = 'Note' | 'Link' | 'File' | 'Expense' | 'Product'
-export type ItemStatus = 'Reference' | 'Researching' | 'Sample needed' | 'Testing' | 'Selected' | 'Not selected'
+export type ItemKind = 'Note' | 'Link' | 'File' | 'Expense' | 'Product' | 'Sample'
+export type ItemStatus = 'Reference' | 'Researching' | 'Sample needed' | 'Requested' | 'Ordered' | 'Received' | 'Testing' | 'Selected' | 'Not selected'
 
 export type WorkspaceAttachment = {
   id: string

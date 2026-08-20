@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
-import { DollarSign, File as FileIcon, FileText, Image, Link2, Menu as MenuIcon, Package, Paperclip, Plus, Search, X } from 'lucide-react'
+import { DollarSign, File as FileIcon, FileText, FlaskConical, Image, Link2, Menu as MenuIcon, Package, Paperclip, Plus, Search, X } from 'lucide-react'
 import { ItemDetail } from './components/ItemDetail'
+import { SupplierSampleOverview } from './components/SupplierSampleOverview'
 import { sectionAreas, starterItems } from './data'
 import { useWorkspaceItems } from './hooks/useWorkspaceItems'
 import type { ItemKind, ItemStatus, Section, WorkspaceItem } from './types'
@@ -13,7 +14,7 @@ function createId() {
 
 export default function App() {
   const [active, setActive] = useState<'Home' | Section>('Home')
-  const { items, loading, error, saveItem: persistItem, deleteItem: persistDelete, getAttachmentUrl, importReferencePack } = useWorkspaceItems()
+  const { items, loading, error, saveItem: persistItem, deleteItem: persistDelete, getAttachmentUrl, importReferencePack, importSupplierSamples } = useWorkspaceItems()
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -40,6 +41,7 @@ export default function App() {
     setEditing({
       id: createId(), title: '', body: capturedUrl ? '' : body, url: capturedUrl, kind,
       section: section ?? 'Notes', area: kind === 'Product' ? 'Equipment' : undefined,
+      status: kind === 'Sample' ? 'Sample needed' : undefined,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     })
     setPendingFile(file ?? null)
@@ -79,9 +81,11 @@ export default function App() {
           onEdit={() => { setEditing(selectedItem); setComposerOpen(true) }}
           onOpenAttachment={async path => { window.open(await getAttachmentUrl(path), '_blank', 'noopener,noreferrer') }} />
           : active === 'Home' ? <Home onCreate={openNew} /> : (
-            <SectionPage section={active} items={visibleItems} query={query} setQuery={setQuery}
+            <SectionPage section={active} items={visibleItems} allItems={items.filter(item => item.section === active)} query={query} setQuery={setQuery}
               onNew={() => openNew(active)} onNewProduct={() => openNew('Store Setup', 'Product')}
+              onNewSample={() => openNew('Suppliers', 'Sample')}
               onOpen={item => setSelectedId(item.id)} onImport={importReferencePack}
+              onImportSamples={importSupplierSamples}
               hasReferencePack={items.some(item => Boolean(item.importKey))} />
           ))}
       </main>
@@ -124,14 +128,14 @@ function Home({ onCreate }: { onCreate: (section?: Section, kind?: ItemKind, bod
   )
 }
 
-function SectionPage({ section, items, query, setQuery, onNew, onNewProduct, onOpen, onImport, hasReferencePack }: { section: Section; items: WorkspaceItem[]; query: string; setQuery: (value: string) => void; onNew: () => void; onNewProduct: () => void; onOpen: (item: WorkspaceItem) => void; onImport: () => Promise<void>; hasReferencePack: boolean }) {
+function SectionPage({ section, items, allItems, query, setQuery, onNew, onNewProduct, onNewSample, onOpen, onImport, onImportSamples, hasReferencePack }: { section: Section; items: WorkspaceItem[]; allItems: WorkspaceItem[]; query: string; setQuery: (value: string) => void; onNew: () => void; onNewProduct: () => void; onNewSample: () => void; onOpen: (item: WorkspaceItem) => void; onImport: () => Promise<void>; onImportSamples: () => Promise<void>; hasReferencePack: boolean }) {
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState('')
   return (
     <section className="section-page">
       <div className="section-heading">
         <div><p className="eyebrow">Workspace</p><h1>{section}</h1></div>
-        <div className="section-actions">{section === 'Store Setup' && <button className="minimal-add" onClick={onNewProduct}><Package size={16} /> Add equipment</button>}<button className="minimal-add" onClick={onNew}><Plus size={17} /> Add</button></div>
+        <div className="section-actions">{section === 'Store Setup' && <button className="minimal-add" onClick={onNewProduct}><Package size={16} /> Add equipment</button>}{section === 'Suppliers' && <button className="minimal-add" onClick={onNewSample}><FlaskConical size={16} /> Add sample</button>}<button className="minimal-add" onClick={onNew}><Plus size={17} /> Add</button></div>
       </div>
       <div className="section-search"><Search size={18} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Search ${section.toLowerCase()}…`} /></div>
       {section === 'Library' && !hasReferencePack && <div className="reference-import">
@@ -139,10 +143,11 @@ function SectionPage({ section, items, query, setQuery, onNew, onNewProduct, onO
         <button disabled={importing} onClick={async () => { setImporting(true); setImportMessage(''); try { await onImport(); setImportMessage('Reference pack added.') } catch (reason) { setImportMessage(reason instanceof Error ? reason.message : 'Could not import the reference pack.') } finally { setImporting(false) } }}>{importing ? 'Adding…' : 'Add references'}</button>
       </div>}
       {importMessage && <p className="import-message">{importMessage}</p>}
+      {section === 'Suppliers' && <SupplierSampleOverview samples={allItems.filter(item => item.kind === 'Sample')} onAdd={onNewSample} onAddStarterPlan={onImportSamples} />}
       <div className="item-list">
         {items.length === 0 ? <div className="empty-state"><p>Nothing here yet.</p><button onClick={onNew}>Add the first item</button></div> : items.map(item => (
           <button className="item-row" key={item.id} onClick={() => onOpen(item)}>
-            <span className="item-icon">{item.kind === 'Link' ? <Link2 size={18} /> : item.kind === 'File' ? <FileIcon size={18} /> : item.kind === 'Expense' ? <DollarSign size={18} /> : item.kind === 'Product' ? <Package size={18} /> : <FileText size={18} />}</span>
+            <span className="item-icon">{item.kind === 'Link' ? <Link2 size={18} /> : item.kind === 'File' ? <FileIcon size={18} /> : item.kind === 'Expense' ? <DollarSign size={18} /> : item.kind === 'Product' ? <Package size={18} /> : item.kind === 'Sample' ? <FlaskConical size={18} /> : <FileText size={18} />}</span>
             <span className="item-copy"><strong>{item.title}</strong><small>{item.body}</small></span>
             <span className="item-meta">{item.status && <em>{item.status}</em>}{item.kind === 'Product' && item.amount ? `₹${Number(item.amount).toLocaleString('en-IN')} · ` : ''}{item.area ?? item.section}</span>
           </button>
@@ -169,13 +174,13 @@ function Editor({ item, pendingFile, onFileChange, onOpenAttachment, onClose, on
         <input className="title-input" autoFocus value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} placeholder="Title" />
         <textarea className="body-input" value={draft.body} onChange={e => setDraft({ ...draft, body: e.target.value })} placeholder="Write anything…" />
         <div className="editor-fields">
-          <label>Type<select value={draft.kind} onChange={e => setDraft({ ...draft, kind: e.target.value as ItemKind })}><option>Note</option><option>Link</option><option>File</option><option>Expense</option><option>Product</option></select></label>
+          <label>Type<select value={draft.kind} onChange={e => setDraft({ ...draft, kind: e.target.value as ItemKind })}><option>Note</option><option>Link</option><option>File</option><option>Expense</option><option>Product</option><option>Sample</option></select></label>
           <label>Belongs to<select value={draft.section} onChange={e => setDraft({ ...draft, section: e.target.value as Section, area: '' })}>{sections.filter(s => s !== 'Home').map(s => <option key={s}>{s}</option>)}</select></label>
           <label>Area<select value={draft.area ?? ''} onChange={e => setDraft({ ...draft, area: e.target.value })}><option value="">Choose later</option>{sectionAreas[draft.section]?.map(area => <option key={area}>{area}</option>)}</select></label>
-          <label>Status<select value={draft.status ?? ''} onChange={e => setDraft({ ...draft, status: (e.target.value || undefined) as ItemStatus | undefined })}><option value="">Not set</option><option>Reference</option><option>Researching</option><option>Sample needed</option><option>Testing</option><option>Selected</option><option>Not selected</option></select></label>
+          <label>Status<select value={draft.status ?? ''} onChange={e => setDraft({ ...draft, status: (e.target.value || undefined) as ItemStatus | undefined })}><option value="">Not set</option><option>Reference</option><option>Researching</option><option>Sample needed</option><option>Requested</option><option>Ordered</option><option>Received</option><option>Testing</option><option>Selected</option><option>Not selected</option></select></label>
         </div>
-        {(draft.kind === 'Link' || draft.kind === 'File' || draft.kind === 'Product') && <input className="url-input" value={draft.url ?? ''} onChange={e => setDraft({ ...draft, url: e.target.value })} placeholder={draft.kind === 'Product' ? 'Product page link' : 'Paste link or file reference'} />}
-        {(draft.kind === 'Expense' || draft.kind === 'Product') && <label className="amount-field">{draft.kind === 'Product' ? 'Price / quote (₹)' : 'Amount (₹)'}<input type="number" min="0" step="0.01" value={draft.amount ?? ''} onChange={e => setDraft({ ...draft, amount: e.target.value })} placeholder="0.00" /></label>}
+        {(draft.kind === 'Link' || draft.kind === 'File' || draft.kind === 'Product' || draft.kind === 'Sample') && <input className="url-input" value={draft.url ?? ''} onChange={e => setDraft({ ...draft, url: e.target.value })} placeholder={draft.kind === 'Product' || draft.kind === 'Sample' ? 'Product page link' : 'Paste link or file reference'} />}
+        {(draft.kind === 'Expense' || draft.kind === 'Product' || draft.kind === 'Sample') && <label className="amount-field">{draft.kind === 'Product' ? 'Price / quote (₹)' : draft.kind === 'Sample' ? 'Sample + delivery cost (₹)' : 'Amount (₹)'}<input type="number" min="0" step="0.01" value={draft.amount ?? ''} onChange={e => setDraft({ ...draft, amount: e.target.value })} placeholder="0.00" /></label>}
         {draft.kind === 'Product' && <div className="product-fields">
           <label>Category<input value={draft.details?.category ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, category: e.target.value } })} placeholder="Cup sealer, blender…" /></label>
           <label>Supplier<input value={draft.details?.supplier ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, supplier: e.target.value } })} placeholder="Supplier name" /></label>
@@ -183,6 +188,16 @@ function Editor({ item, pendingFile, onFileChange, onOpenAttachment, onClose, on
           <label>MOQ<input value={draft.details?.moq ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, moq: e.target.value } })} placeholder="Minimum order" /></label>
           <label>Lead time<input value={draft.details?.leadTime ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, leadTime: e.target.value } })} placeholder="Delivery estimate" /></label>
           <label>Warranty / service<input value={draft.details?.warranty ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, warranty: e.target.value } })} placeholder="Local service details" /></label>
+        </div>}
+        {draft.kind === 'Sample' && <div className="product-fields">
+          <label>Supplier<input value={draft.details?.supplier ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, supplier: e.target.value } })} placeholder="Tea Planet, QQS…" /></label>
+          <label>Product / category<input value={draft.details?.category ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, category: e.target.value } })} placeholder="Flavor, powder, jelly…" /></label>
+          <label>Requested date<input type="date" value={draft.details?.requestedDate ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, requestedDate: e.target.value } })} /></label>
+          <label>Received date<input type="date" value={draft.details?.receivedDate ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, receivedDate: e.target.value } })} /></label>
+          <label>MOQ<input value={draft.details?.moq ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, moq: e.target.value } })} placeholder="Minimum order" /></label>
+          <label>Lead time<input value={draft.details?.leadTime ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, leadTime: e.target.value } })} placeholder="Delivery time" /></label>
+          <label>Label / FSSAI check<select value={draft.details?.labelCheck ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, labelCheck: e.target.value } })}><option value="">Not checked</option><option>Looks complete</option><option>Needs clarification</option><option>Not acceptable</option><option>Not applicable</option></select></label>
+          <label>Taste score<input type="number" min="1" max="10" value={draft.details?.tasteScore ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, tasteScore: e.target.value } })} placeholder="1–10" /></label>
         </div>}
         <label className="source-field">Source / reference<input value={draft.source ?? ''} onChange={e => setDraft({ ...draft, source: e.target.value })} placeholder="Optional document, conversation, or website" /></label>
         {draft.kind === 'File' && <div className="attachment-area">

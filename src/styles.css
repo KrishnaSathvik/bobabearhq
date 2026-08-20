@@ -52,6 +52,20 @@ button { cursor: pointer; }
 .reference-import button { flex: 0 0 auto; border: 0; border-radius: 8px; padding: 10px 15px; background: #b9783d; color: white; }
 .reference-import button:disabled { opacity: .6; cursor: wait; }
 .import-message { margin: -14px 0 22px; color: #6b655f; font-size: 13px; }
+.sample-empty { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; margin: 24px 0 30px; padding: 20px 22px; border: 1px solid #e8dfd6; border-radius: 12px; background: #fffdfa; }
+.sample-empty-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; color: #945b2e; background: #f5ebe1; }
+.sample-empty strong { font-size: 14px; font-weight: 500; }
+.sample-empty p { margin: 5px 0 0; color: #7b726b; font-size: 12px; line-height: 1.5; }
+.sample-empty small { display: block; margin-top: 6px; color: #a75145; }
+.sample-empty button, .sample-overview button { border: 0; border-radius: 7px; background: #c9823f; color: white; padding: 10px 14px; font-size: 12px; white-space: nowrap; }
+.sample-empty button:disabled { opacity: .55; }
+.sample-overview { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(3, auto) auto; align-items: center; gap: 28px; margin: 24px 0 30px; padding: 18px 20px; border: 1px solid #e8dfd6; border-radius: 12px; background: #fffdfa; }
+.sample-overview-title { display: flex; align-items: center; gap: 9px; color: #8e5b33; }
+.sample-overview-title strong { color: #322923; font-size: 14px; font-weight: 500; }
+.sample-stat { display: grid; gap: 2px; text-align: center; }
+.sample-stat span { color: #8a817a; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.sample-stat strong { font-size: 17px; font-weight: 500; }
+.sample-overview button { display: inline-flex; align-items: center; gap: 6px; }
 .empty-state { text-align: center; padding: 100px 20px; color: #877d75; }
 .empty-state button { border: 0; background: none; color: #a55f27; }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(40,30,22,.12); z-index: 30; display: flex; justify-content: flex-end; }
@@ -156,6 +170,10 @@ button { cursor: pointer; }
   .editor-fields { grid-template-columns: 1fr; }
   .reference-import { align-items: flex-start; flex-direction: column; }
   .reference-import button { width: 100%; }
+  .sample-empty { grid-template-columns: auto 1fr; }
+  .sample-empty button { grid-column: 1 / -1; width: 100%; }
+  .sample-overview { grid-template-columns: 1fr repeat(3, auto); gap: 18px; }
+  .sample-overview button { grid-column: 1 / -1; justify-content: center; }
   .detail-page { width: min(100% - 36px, 900px); margin-top: 30px; }
   .detail-toolbar { margin-bottom: 48px; }
   .detail-heading h1 { font-size: 34px; }

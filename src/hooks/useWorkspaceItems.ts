@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { starterItems } from '../data'
 import { referenceCatalog } from '../referenceCatalog'
+import { supplierSamplePlan } from '../supplierSamplePlan'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import type { WorkspaceAttachment, WorkspaceItem } from '../types'
 
@@ -186,5 +187,31 @@ export function useWorkspaceItems() {
     await loadRemoteItems(workspaceId)
   }
 
-  return { items, loading, error, saveItem, deleteItem, getAttachmentUrl, importReferencePack }
+  async function importSupplierSamples() {
+    const now = new Date().toISOString()
+    if (!supabase || !workspaceId) {
+      setItems(current => {
+        const existingKeys = new Set(current.map(item => item.importKey).filter(Boolean))
+        const additions = supplierSamplePlan.filter(item => !existingKeys.has(item.importKey)).map(item => ({
+          ...item, id: crypto.randomUUID(), createdAt: now, updatedAt: now,
+        }))
+        return [...additions, ...current]
+      })
+      return
+    }
+    const { data: authData } = await supabase.auth.getUser()
+    if (!authData.user) throw new Error('Please sign in again.')
+    const records = supplierSamplePlan.map(item => ({
+      id: crypto.randomUUID(), workspace_id: workspaceId, title: item.title, body: item.body,
+      kind: item.kind, section: item.section, area: item.area ?? null, url: item.url ?? null,
+      amount: item.amount ? Number(item.amount) : null, status: item.status ?? null,
+      source: item.source ?? null, import_key: item.importKey, details: item.details ?? {},
+      created_by: authData.user!.id, created_at: now, updated_at: now,
+    }))
+    const { error: importError } = await supabase.from('items').upsert(records, { onConflict: 'workspace_id,import_key', ignoreDuplicates: true })
+    if (importError) throw importError
+    await loadRemoteItems(workspaceId)
+  }
+
+  return { items, loading, error, saveItem, deleteItem, getAttachmentUrl, importReferencePack, importSupplierSamples }
 }

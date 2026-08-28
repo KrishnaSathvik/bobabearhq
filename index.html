@@ -2,8 +2,28 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#fcfbf8" />
+    <!-- No pinch-zoom and no double-tap zoom: installed to a home screen this
+         is an app, and a layout that slides sideways under your thumb while you
+         are ticking a box does not read as one. Nothing needs zooming — every
+         box you type into is 16px, which is what used to make iOS zoom the page
+         on its own. viewport-fit=cover lets env(safe-area-inset-*) report real
+         numbers so the notch and the home bar can be padded around. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#FAF8F4" />
+    <meta name="color-scheme" content="light" />
+    <!-- iOS installs from Safari's Share sheet rather than a prompt, and reads
+         these rather than the manifest. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-apple-180.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="apple-mobile-web-app-title" content="Boba Bear HQ" />
     <title>Boba Bear HQ</title>
   </head>
   <body>

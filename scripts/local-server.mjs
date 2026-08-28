@@ -12,6 +12,12 @@ const contentTypes = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.json': 'application/json; charset=utf-8',
+  // Chrome will read a manifest served as anything, but it warns — and a local
+  // server that answers differently from the host is a local server that hides
+  // the problem you came to it to find.
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 }
 
 const server = createServer(async (request, response) => {

@@ -1,250 +1,1178 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
+/* Boba Bear HQ — see DESIGN_SYSTEM.md.
+   Warm ivory background, dark text, thin borders, caramel accent, lots of
+   whitespace. Every value below comes from a token; nothing hard-codes a
+   colour, a radius or a step of the spacing scale. */
 
-:root { font-family: 'DM Sans', system-ui, sans-serif; color: #261d18; background: #fdfcf9; font-synthesis: none; }
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap');
+
+:root {
+  /* Core */
+  --background: #FAF8F4;
+  --surface: #FFFDFC;
+  --surface-muted: #F5F1EB;
+  --text-primary: #2B2521;
+  --text-secondary: #746B64;
+  --text-muted: #9A918A;
+  --border: #E7E0D9;
+
+  /* Boba Bear accent */
+  --brand: #B8794D;
+  --brand-hover: #A86A41;
+  --brand-soft: #F1E3D7;
+  --brand-subtle: #F8F0E9;
+
+  /* Status — used sparingly, and never as the only carrier of meaning */
+  --success: #657B65;
+  --warning: #A98049;
+  --danger: #A45D56;
+  --info: #667988;
+  --success-bg: #EDF2ED;
+  --warning-bg: #F6F0E6;
+  --danger-bg: #F6ECEA;
+  --info-bg: #EDF0F2;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* Shadow — almost none, and only for things that genuinely float */
+  --shadow-sm: 0 1px 2px rgba(43, 37, 33, .05);
+  --shadow-float: 0 4px 14px rgba(43, 37, 33, .14);
+  --shadow-panel: 0 12px 34px rgba(43, 37, 33, .12);
+
+  /* Motion */
+  --fast: 140ms;
+  --normal: 200ms;
+  --sheet: 250ms;
+
+  /* Layout */
+  --pane-width: 348px;
+  --measure: 720px;
+  /* A checklist or a comparison table is scannable rows rather than prose, so
+     it takes more width than a paragraph should — but not a whole monitor. */
+  --measure-wide: 960px;
+  --gutter: 20px;
+  /* The workspace header: 16 + 12 padding around a 44px control, plus whatever
+     the status bar takes when this is running as an installed app. The toolbars
+     that stick underneath it measure from here rather than each guessing. */
+  --header-h: calc(72px + env(safe-area-inset-top));
+
+  font-family: Geist, 'Geist Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  color: var(--text-primary);
+  background: var(--background);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; min-height: 100vh; background: #fdfcf9; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--background); }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
-.app-shell { min-height: 100vh; }
-.topbar { height: 88px; display: grid; grid-template-columns: 250px 1fr 140px; align-items: center; padding: 0 38px; background: rgba(253,252,249,.94); position: sticky; top: 0; z-index: 10; }
-.brand { border: 0; background: none; font-size: 21px; font-weight: 600; text-align: left; padding: 0; }
-.nav { display: flex; justify-content: center; gap: 36px; height: 100%; }
-.nav-item { border: 0; background: none; font-size: 15px; position: relative; padding: 4px 0 0; white-space: nowrap; }
-.nav-item.active::after { content: ''; position: absolute; left: 0; right: 0; bottom: 18px; height: 2px; background: #c9823f; }
-.top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 28px; }
-.icon-button, .mobile-menu { border: 0; background: transparent; padding: 6px; display: grid; place-items: center; }
-.mobile-menu { display: none; }
-.avatar { width: 44px; height: 44px; border: 0; border-radius: 50%; background: #cc8b48; color: white; font-size: 17px; }
-.global-search { position: fixed; z-index: 20; top: 100px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 40px)); height: 50px; background: white; border: 1px solid #ded8d1; box-shadow: 0 10px 35px rgba(42,29,18,.1); display: flex; align-items: center; gap: 12px; padding: 0 16px; border-radius: 8px; }
-.global-search input { flex: 1; border: 0; outline: none; background: transparent; }
-.global-search button { border: 0; background: none; display: grid; }
-.home { width: min(760px, calc(100% - 40px)); margin: 135px auto 0; text-align: center; }
-.home h1 { font-size: 18px; font-weight: 500; margin: 0 0 62px; }
-.home textarea { border: 0; outline: 0; resize: none; background: transparent; display: block; width: 100%; min-height: 220px; padding: 0; font-size: 25px; line-height: 1.55; text-align: left; }
-.home textarea::placeholder { color: #9b928b; opacity: 1; }
-.capture-actions { display: flex; align-items: center; justify-content: center; gap: 32px; }
-.capture-tool { border: 0; background: transparent; padding: 8px; display: grid; place-items: center; border-radius: 6px; }
-.capture-tool svg { width: 25px; height: 25px; stroke-width: 1.7; }
-.capture-tool.selected { color: #c9823f; background: #f5eee7; }
-.save-button { border: 0; border-radius: 5px; background: #c9823f; color: white; padding: 13px 36px; font-weight: 500; margin-left: 40px; }
-.save-button:disabled { opacity: .45; cursor: default; }
-.home > p { color: #837a74; font-size: 14px; margin-top: 36px; }
-.section-page { width: min(900px, calc(100% - 48px)); margin: 80px auto 100px; }
-.section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 38px; }
-.section-heading h1 { font-size: 30px; font-weight: 500; margin: 5px 0 0; }
-.section-actions { display: flex; align-items: center; gap: 24px; }
-.eyebrow { color: #8c8179; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin: 0; }
-.minimal-add { border: 0; background: none; color: #a55f27; display: flex; align-items: center; gap: 6px; padding: 8px 0; }
-.section-search { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #ded9d3; padding: 0 0 13px; margin-bottom: 10px; color: #897f78; }
-.section-search input { flex: 1; border: 0; background: transparent; outline: 0; }
-.item-list { border-top: 0; }
-.item-row { width: 100%; border: 0; border-bottom: 1px solid #ebe7e1; background: transparent; display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 14px; text-align: left; padding: 22px 4px; }
-.item-row:hover { background: #faf7f2; }
-.item-icon { color: #9e6d43; display: grid; }
-.item-copy { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.item-copy strong { font-size: 16px; font-weight: 500; }
-.item-copy small { color: #807771; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item-meta { color: #8a817a; font-size: 13px; padding-left: 24px; }
-.item-meta em { display: block; width: max-content; margin: 0 0 6px auto; padding: 3px 8px; border-radius: 999px; background: #f6eee5; color: #8b5a2b; font-size: 10px; font-style: normal; font-weight: 600; letter-spacing: .02em; }
-.reference-import { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 4px 0 28px; padding: 20px 22px; border: 1px solid #eadfd3; border-radius: 14px; background: #fffdfa; }
-.reference-import strong { font-size: 15px; }
-.reference-import p { margin: 5px 0 0; color: #766f69; font-size: 13px; }
-.reference-import button { flex: 0 0 auto; border: 0; border-radius: 8px; padding: 10px 15px; background: #b9783d; color: white; }
-.reference-import button:disabled { opacity: .6; cursor: wait; }
-.import-message { margin: -14px 0 22px; color: #6b655f; font-size: 13px; }
-.sample-empty { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; margin: 24px 0 30px; padding: 20px 22px; border: 1px solid #e8dfd6; border-radius: 12px; background: #fffdfa; }
-.sample-empty-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; color: #945b2e; background: #f5ebe1; }
-.sample-empty strong { font-size: 14px; font-weight: 500; }
-.sample-empty p { margin: 5px 0 0; color: #7b726b; font-size: 12px; line-height: 1.5; }
-.sample-empty small { display: block; margin-top: 6px; color: #a75145; }
-.sample-empty button, .sample-overview button { border: 0; border-radius: 7px; background: #c9823f; color: white; padding: 10px 14px; font-size: 12px; white-space: nowrap; }
-.sample-empty button:disabled { opacity: .55; }
-.sample-overview { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(3, auto) auto; align-items: center; gap: 28px; margin: 24px 0 30px; padding: 18px 20px; border: 1px solid #e8dfd6; border-radius: 12px; background: #fffdfa; }
-.sample-overview-title { display: flex; align-items: center; gap: 9px; color: #8e5b33; }
-.sample-overview-title strong { color: #322923; font-size: 14px; font-weight: 500; }
-.sample-stat { display: grid; gap: 2px; text-align: center; }
-.sample-stat span { color: #8a817a; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
-.sample-stat strong { font-size: 17px; font-weight: 500; }
-.sample-overview button { display: inline-flex; align-items: center; gap: 6px; }
-.launch-checklist { margin: 28px 0 38px; padding: 22px 22px 10px; border: 1px solid #e8dfd6; border-radius: 12px; background: #fffdfa; }
-.launch-checklist > header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.launch-checklist > header div { display: flex; align-items: center; gap: 18px; }
-.launch-checklist > header span { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
-.launch-checklist > header strong { color: #8a817a; font-size: 12px; font-weight: 500; }
-.launch-checklist > header button { border: 0; background: none; color: #9b5b29; display: inline-flex; align-items: center; gap: 6px; }
-.checklist-progress { height: 3px; overflow: hidden; margin: 17px 0 26px; border-radius: 999px; background: #eee8e2; }
-.checklist-progress span { display: block; height: 100%; background: #c9823f; transition: width .2s ease; }
-.checklist-phase { margin-bottom: 25px; }
-.checklist-phase h2 { margin: 0 0 8px; color: #897f78; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-.checklist-row { display: grid; grid-template-columns: 26px 1fr; align-items: center; gap: 8px; border-bottom: 1px solid #eee9e4; }
-.check-toggle { width: 18px; height: 18px; display: grid; place-items: center; border: 1px solid #c8bdb4; border-radius: 4px; background: transparent; padding: 0; color: white; }
-.checklist-row.checked .check-toggle { border-color: #b8753b; background: #b8753b; }
-.check-toggle:disabled { opacity: .5; }
-.check-title { border: 0; background: transparent; padding: 13px 0; text-align: left; font-size: 14px; }
-.checklist-row.checked .check-title { color: #938b84; text-decoration: line-through; }
-.checklist-error { color: #a75145; font-size: 12px; }
-.product-fields select { min-width: 0; border: 0; border-bottom: 1px solid #ddd5cc; background: transparent; outline: 0; padding: 10px 0; }
-.completed-field { display: flex !important; grid-auto-flow: column; align-items: center; justify-content: start; align-self: end; padding: 10px 0; }
-.completed-field input { width: 16px; height: 16px; accent-color: #b8753b; }
-.money-overview { margin: 24px 0 30px; padding: 20px 22px; border: 1px solid #e8dfd6; border-radius: 12px; background: #fffdfa; }
-.money-overview > header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.money-overview > header > div:first-child { display: inline-flex; align-items: center; gap: 8px; }
-.money-overview > header strong { font-size: 14px; font-weight: 500; }
-.money-actions { display: flex; gap: 18px; }
-.money-actions button { border: 0; background: none; color: #9b5b29; display: inline-flex; align-items: center; gap: 6px; padding: 6px 0; }
-.money-totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 20px; border-top: 1px solid #ebe5df; }
-.money-totals > div { display: grid; gap: 6px; padding: 20px 0 4px; }
-.money-totals > div + div { padding-left: 28px; border-left: 1px solid #ebe5df; }
-.money-totals span { color: #8a8078; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
-.money-totals strong { font-size: 24px; font-weight: 500; }
-.money-totals small, .money-overview > p { color: #8a817a; font-size: 11px; }
-.money-overview > p { margin: 18px 0 0; }
-.equipment-comparison { border: 1px solid #ebe5df; border-radius: 8px; padding: 20px 22px 8px; margin-bottom: 26px; }
-.equipment-comparison > header { display: flex; align-items: center; justify-content: space-between; }
-.equipment-comparison > header div { display: flex; align-items: center; gap: 9px; }
-.equipment-comparison > header button { display: flex; align-items: center; gap: 6px; border: 0; background: none; color: #a55f27; font-size: 13px; }
-.comparison-group { margin-top: 20px; }
-.comparison-group h3 { font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; color: #8a8078; margin: 0 0 8px; }
-.comparison-group h3 span { text-transform: none; letter-spacing: 0; color: #a9a09a; }
-.comparison-scroll { overflow-x: auto; }
-.comparison-scroll table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 13px; }
-.comparison-scroll th { text-align: left; font-weight: 400; color: #8a8078; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 0 14px 8px 0; }
-.comparison-scroll td { padding: 10px 14px 10px 0; border-top: 1px solid #f0ebe5; vertical-align: top; color: #6f6660; }
-.comparison-scroll td button { border: 0; background: none; padding: 0; text-align: left; color: #2f2721; font-size: 13px; }
-.home-dragging { outline: 2px dashed #d3a877; outline-offset: 18px; border-radius: 6px; }
-.empty-state { text-align: center; padding: 100px 20px; color: #877d75; }
-.empty-state button { border: 0; background: none; color: #a55f27; }
-.modal-backdrop { position: fixed; inset: 0; background: rgba(40,30,22,.12); z-index: 30; display: flex; justify-content: flex-end; }
-.editor { width: min(540px, 100%); height: 100%; overflow-y: auto; background: #fffefb; padding: 35px 42px; display: flex; flex-direction: column; box-shadow: -15px 0 50px rgba(35,25,18,.08); }
-.editor-top { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: #766c64; margin-bottom: 44px; }
-.editor-top button { border: 0; background: none; }
-.title-input, .body-input, .url-input { border: 0; background: transparent; outline: 0; width: 100%; }
-.title-input { font-size: 29px; font-weight: 500; margin-bottom: 24px; }
-.body-input { font-size: 16px; line-height: 1.65; resize: none; min-height: 220px; }
-.editor-fields { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 12px; border-top: 1px solid #e8e2db; padding-top: 24px; }
-.editor-fields label { display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #81766e; }
-.editor-fields select { border: 0; border-bottom: 1px solid #ddd5cc; background: transparent; padding: 7px 0; outline: 0; }
-.url-input { border-bottom: 1px solid #ddd5cc; padding: 13px 0; margin-top: 22px; }
-.amount-field { display: flex; flex-direction: column; gap: 8px; color: #81766e; font-size: 12px; margin-top: 22px; }
-.amount-field input { border: 0; border-bottom: 1px solid #ddd5cc; background: transparent; outline: 0; padding: 10px 0; font-size: 16px; }
-.source-field { display: grid; gap: 8px; color: #81766e; font-size: 12px; margin-top: 20px; }
-.source-field input { border: 0; border-bottom: 1px solid #ddd5cc; background: transparent; outline: 0; padding: 10px 0; }
-.product-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px; margin-top: 20px; }
-.product-fields label { display: grid; gap: 8px; color: #81766e; font-size: 12px; }
-.product-fields input { min-width: 0; border: 0; border-bottom: 1px solid #ddd5cc; background: transparent; outline: 0; padding: 10px 0; }
-.attachment-area { margin-top: 28px; display: grid; gap: 9px; color: #7b7169; font-size: 13px; }
-.attachment-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 3px; }
-.attachment-heading > span { color: #5f554e; font-size: 12px; font-weight: 500; }
-.attachment-heading small { color: #9a918a; font-size: 10px; }
-.attachment-picker { width: max-content; border: 0; background: #f6f0e9; color: #8f582d; border-radius: 5px; padding: 9px 11px; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
-.attachment-record { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; border-bottom: 1px solid #ebe5df; padding: 9px 0; }
-.attachment-record > span, .attachment-open { min-width: 0; display: grid; gap: 3px; overflow-wrap: anywhere; }
-.attachment-record small { color: #9a918a; font-size: 10px; }
-.attachment-record button { border: 0; background: none; padding: 5px 0; font-size: 11px; }
-.attachment-open { color: #6d4930; text-align: left; }
-.attachment-remove, .attachment-record.pending button { color: #a65e50; }
-.attachment-error { margin: 4px 0 0; color: #a75145; font-size: 11px; }
-.editor-bottom { margin-top: 34px; display: flex; justify-content: space-between; align-items: center; }
-.editor-bottom .save-button { margin-left: 0; }
-.delete-button { color: #a65e50; background: none; border: 0; }
-.delete-confirm { display: flex; align-items: center; gap: 10px; }
-.delete-confirm button { border: 0; background: none; font-size: 13px; }
-.auth-loading { min-height: 100vh; display: grid; place-items: center; color: #7f756e; }
-.login-page { min-height: 100vh; display: grid; place-items: center; padding: 28px; }
-.login-card { width: min(390px, 100%); }
-.login-brand { font-weight: 600; margin: 0 0 92px; }
-.login-card h1 { font-size: 29px; font-weight: 500; margin: 0 0 10px; }
-.login-copy { color: #837970; margin: 0 0 42px; }
-.login-card form { display: flex; flex-direction: column; gap: 24px; }
-.login-card label { display: flex; flex-direction: column; gap: 9px; color: #766d66; font-size: 13px; }
-.login-card input { border: 0; border-bottom: 1px solid #d9d2cb; background: transparent; outline: 0; padding: 10px 0; font-size: 16px; }
-.login-card input:focus { border-color: #b97235; }
-.login-button { border: 0; background: #c9823f; color: white; border-radius: 5px; padding: 13px 24px; margin-top: 8px; }
-.login-button:disabled { opacity: .5; cursor: default; }
-.auth-error { color: #a75145; font-size: 13px; margin: -8px 0 0; }
-.workspace-loading { min-height: calc(100vh - 88px); display: grid; place-items: center; color: #837970; }
-.workspace-error { position: fixed; left: 50%; top: 104px; transform: translateX(-50%); z-index: 15; background: #fff7f3; color: #954f43; border: 1px solid #ead2cb; border-radius: 5px; padding: 10px 14px; font-size: 13px; }
-.workspace-offline { max-width: 720px; margin: 0 auto 20px; background: #fdf8ef; color: #7a5a2e; border: 1px solid #ecdcc2; border-radius: 5px; padding: 10px 14px; font-size: 13px; text-align: center; }
+h1, h2, h3, p { margin: 0; }
 
-.detail-page { width: min(900px, calc(100% - 48px)); margin: 58px auto 110px; }
-.detail-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 72px; }
-.detail-back, .detail-edit { border: 0; background: transparent; display: inline-flex; align-items: center; gap: 8px; padding: 8px 0; color: #716860; }
-.detail-edit { color: #9b5b29; }
-.detail-document { width: min(720px, 100%); margin: 0 auto; }
-.detail-heading { padding-bottom: 38px; border-bottom: 1px solid #e8e2dc; }
-.detail-kicker { margin-bottom: 15px; color: #96725a; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
-.detail-heading h1 { max-width: 680px; margin: 0; font-size: clamp(34px, 5vw, 48px); line-height: 1.14; font-weight: 500; letter-spacing: -.025em; }
-.detail-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
-.detail-badges span { padding: 5px 10px; border-radius: 999px; background: #f5eee7; color: #85572f; font-size: 11px; font-weight: 500; }
-.detail-badges span + span { background: #f1efec; color: #726a64; }
-.detail-body { padding: 40px 0 12px; white-space: pre-wrap; color: #3b332d; font-size: 18px; line-height: 1.8; }
-.product-summary { display: flex; align-items: center; gap: 14px; margin-top: 28px; padding: 18px 20px; border: 1px solid #e9dfd5; border-radius: 12px; background: #fffdfa; }
-.product-summary-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: #f5ebe1; color: #9a5e2d; }
-.product-summary div:last-child { display: grid; gap: 3px; }
-.product-summary small, .file-reference small { color: #8a8078; font-size: 11px; }
-.product-summary strong, .file-reference strong { font-size: 15px; font-weight: 500; }
-.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 34px 0 0; border-top: 1px solid #ebe5df; }
-.detail-grid div { padding: 20px 0; border-bottom: 1px solid #ebe5df; }
+/* Visible focus everywhere, in the accent rather than the browser's blue. */
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* ─── Shell ──────────────────────────────────────────────────────────────
+   Mobile is one pane. Desktop is a Notes-style two-pane: a list capped at
+   348px and the note taking the rest, its text held to a readable measure. */
+
+.app-shell { min-height: 100vh; }
+
+.app-shell.two-pane {
+  display: grid;
+  grid-template-columns: var(--pane-width) minmax(0, 1fr);
+  height: 100vh;
+}
+
+.two-pane .list-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  background: var(--background);
+}
+
+.two-pane .pane-body { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 88px; }
+.two-pane .note-pane { min-width: 0; overflow-y: auto; background: var(--background); }
+
+/* ─── Header ─────────────────────────────────────────────────────────── */
+
+/* Installed to a home screen there is no browser chrome above this, so the
+   header is what meets the status bar and the notch. viewport-fit=cover makes
+   these insets real; in a browser tab they are zero and nothing moves. */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(16px + env(safe-area-inset-top)) calc(var(--gutter) + env(safe-area-inset-right)) 12px calc(var(--gutter) + env(safe-area-inset-left));
+  background: var(--background);
+}
+
+.app-shell:not(.two-pane) .topbar { position: sticky; top: 0; z-index: 10; }
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--text-primary);
+}
+
+.brand-mark { width: 32px; height: 32px; object-fit: contain; }
+.top-actions { display: flex; align-items: center; gap: 4px; }
+
+/* Ghost by default — no background until you reach for it. */
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 44px; height: 44px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background var(--fast) ease, color var(--fast) ease;
+}
+@media (hover: hover) { .icon-button:hover { background: var(--surface-muted); color: var(--text-primary); } }
+
+.avatar {
+  position: relative;
+  width: 34px; height: 34px;
+  border: 0; border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+  font-size: 14px; font-weight: 500;
+}
+/* A 34px circle beside a 44px icon button is the right drawing and the wrong
+   target, so the thumb gets 44 without the circle growing to match. */
+.avatar::after { content: ''; position: absolute; inset: -5px; }
+
+.account { position: relative; }
+.account-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 30;
+  min-width: 232px;
+  padding: 14px 16px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-panel);
+  display: grid; gap: 2px;
+}
+.account-email { font-size: 13px; overflow-wrap: anywhere; }
+.account-note { margin-bottom: 8px; font-size: 12px; color: var(--text-muted); }
+.account-signout {
+  border: 0; border-top: 1px solid var(--border);
+  background: none; padding: 12px 0; text-align: left;
+  font-size: 13px; color: var(--danger);
+}
+
+/* ─── Screens ────────────────────────────────────────────────────────── */
+
+.screen { padding: 8px calc(var(--gutter) + env(safe-area-inset-right)) calc(120px + env(safe-area-inset-bottom)) calc(var(--gutter) + env(safe-area-inset-left)); }
+.two-pane .screen { padding-bottom: 40px; }
+/* A view opened on a laptop is content, so it lives in the wide pane. */
+.two-pane .note-pane .saved-view { width: min(var(--measure-wide), 100%); margin: 0 auto; padding-top: 20px; }
+
+.screen-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+.screen-heading h1 { display: flex; align-items: baseline; gap: 10px; font-size: 28px; line-height: 32px; font-weight: 600; letter-spacing: -.02em; }
+.screen-count { font-size: 14px; font-weight: 400; color: var(--text-muted); }
+
+/* `Everything ▾` — the only filter control in the app, and it is a ghost. */
+.filter-button {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 32px;
+  margin-left: -8px;
+  border: 0; border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 4px 8px;
+  font-size: 14px; color: var(--text-secondary);
+  transition: background var(--fast) ease, color var(--fast) ease;
+}
+@media (hover: hover) { .filter-button:hover { background: var(--surface-muted); color: var(--text-primary); } }
+.filter-button svg { color: var(--text-muted); }
+
+.eyebrow {
+  margin: 32px 0 4px;
+  font-size: 12px; line-height: 16px; font-weight: 500;
+  letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.screen-heading + .eyebrow { margin-top: 28px; }
+
+/* ─── Pinned views ───────────────────────────────────────────────────── */
+
+.pin-list { display: grid; }
+
+.pin-row {
+  display: grid; gap: 1px;
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  padding: 7px 8px 7px 8px;
+  margin-left: -8px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  transition: background var(--fast) ease;
+}
+@media (hover: hover) { .pin-row:hover { background: var(--surface-muted); } }
+/* The pin whose view is open, marked the way a selected row is marked. */
+.pin-row.active { background: var(--brand-subtle); }
+.pin-row.active strong { color: var(--brand-hover); }
+.pin-row strong { font-size: 15px; line-height: 21px; font-weight: 500; }
+.pin-row small { font-size: 12px; line-height: 17px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ─── List rows ──────────────────────────────────────────────────────
+   Separators, never boxes. A page of cards reads as a dashboard. */
+
+.item-list { display: grid; }
+
+.item-row {
+  display: flex; align-items: flex-start;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  transition: background var(--fast) ease;
+}
+@media (hover: hover) { .item-row:hover { background: var(--surface-muted); } }
+.item-row.selected { background: var(--brand-subtle); }
+
+.item-open {
+  flex: 1; min-width: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  border: 0; background: transparent;
+  padding: 14px 4px;
+  text-align: left;
+}
+
+/* Same width as the checkbox, so an unticked-off row still lines up. */
+.check-slot { flex: none; width: 20px; margin: 0 12px 0 2px; }
+.item-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.item-copy strong { font-size: 16px; line-height: 22px; font-weight: 500; }
+.item-copy small { font-size: 13px; line-height: 18px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-when { color: var(--text-muted) !important; }
+.item-meta { padding-left: 16px; font-size: 12px; line-height: 22px; color: var(--text-muted); white-space: nowrap; }
+
+/* The checkbox: 20px, 2px border, ~6px radius. The thing a thumb actually
+   hits is 44 square, extended past the box with a pseudo-element. */
+.check-toggle {
+  position: relative; flex: none;
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  margin: 16px 12px 0 2px;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  padding: 0;
+  color: #fff;
+  transition: background var(--fast) ease, border-color var(--fast) ease;
+}
+.check-toggle::after { content: ''; position: absolute; inset: -12px; }
+@media (hover: hover) { .check-toggle:hover { border-color: var(--brand); } }
+.check-toggle:disabled { opacity: .5; }
+.item-row.done .check-toggle, .checklist-row.checked .check-toggle, .record-task.done .check-toggle { border-color: var(--brand); background: var(--brand); }
+.item-row.done .item-copy strong { color: var(--text-muted); }
+.item-row.struck .item-copy strong { text-decoration: line-through; }
+.item-row.done .item-copy small, .item-row.done .item-icon { color: var(--text-muted); }
+
+/* ─── The Add button ─────────────────────────────────────────────────
+   The most visible action in the app. Nothing else competes with it. */
+
+.add-button {
+  /* On the line that names the screen, not floating over the bottom-right
+     corner of whatever you were reading. Same single control, and it now sits
+     where the `Everything ▾` filter used to. */
+  flex: none;
+  align-self: center;
+  /* 44, not 38: this is the one control the whole app is pressed through, and
+     §17 puts the floor at 44 for every control. */
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+  transition: background var(--fast) ease, transform var(--fast) ease;
+}
+@media (hover: hover) { .add-button:hover { background: var(--brand-hover); } }
+.add-button:active { transform: scale(.96); }
+
+/* ─── Bottom sheets ──────────────────────────────────────────────────
+   A phone answers a question with a sheet, not with another page. */
+
+.sheet-scrim {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(43, 37, 33, .22);
+  animation: fade var(--fast) ease;
+}
+
+.sheet {
+  width: 100%;
+  max-height: 84vh;
+  overflow-y: auto;
+  padding: 8px 8px calc(16px + env(safe-area-inset-bottom));
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: var(--surface);
+  box-shadow: var(--shadow-panel);
+  animation: rise var(--sheet) cubic-bezier(.2, .8, .3, 1);
+}
+
+.sheet-grip { width: 36px; height: 4px; margin: 4px auto 12px; border-radius: var(--radius-pill); background: var(--border); }
+.sheet-title { padding: 0 14px 10px calc(14px + 16px + 12px); font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.sheet-warning { padding: 4px 14px 8px; font-size: 13px; color: var(--text-secondary); }
+
+.sheet-option {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  border: 0; border-radius: var(--radius-md);
+  background: transparent;
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 16px;
+  transition: background var(--fast) ease;
+}
+@media (hover: hover) { .sheet-option:hover { background: var(--surface-muted); } }
+.sheet-option.selected { color: var(--text-primary); }
+.sheet-option.danger { color: var(--danger); }
+.sheet-tick { width: 16px; height: 16px; flex: none; display: grid; place-items: center; color: var(--brand); }
+
+@keyframes rise { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* On a laptop the same markup settles into a small centred panel. */
+@media (min-width: 768px) {
+  .sheet-scrim { align-items: center; }
+  .sheet { width: min(400px, calc(100% - 40px)); border-radius: var(--radius-lg); padding-bottom: 12px; }
+  .sheet-grip { display: none; }
+}
+
+/* ─── Empty states ───────────────────────────────────────────────────── */
+
+.empty-state { display: grid; justify-items: center; gap: 8px; padding: 72px 20px; text-align: center; color: var(--text-secondary); }
+.empty-state img { opacity: .8; margin-bottom: 4px; }
+.empty-state p { font-size: 16px; }
+.empty-state small { max-width: 34ch; font-size: 14px; color: var(--text-muted); }
+.empty-state > button { margin-top: 8px; border: 0; background: none; padding: 8px; font-size: 15px; color: var(--brand); }
+
+.empty-note { display: grid; justify-items: center; gap: 10px; height: 100%; align-content: center; color: var(--text-muted); }
+.empty-note img { opacity: .55; }
+
+.ghost-button {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 44px;
+  border: 0; border-radius: var(--radius-md);
+  background: transparent;
+  padding: 10px 14px;
+  font-size: 15px; color: var(--brand);
+  transition: background var(--fast) ease;
+}
+@media (hover: hover) { .ghost-button:hover { background: var(--brand-subtle); } }
+
+/* ─── Buttons ────────────────────────────────────────────────────────── */
+
+.save-button, .login-button, .primary-link {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px;
+  border: 0; border-radius: var(--radius-md);
+  background: var(--brand);
+  color: #fff;
+  padding: 11px 22px;
+  font-size: 15px; font-weight: 500;
+  text-decoration: none;
+  transition: background var(--fast) ease;
+}
+@media (hover: hover) { .save-button:hover, .login-button:hover, .primary-link:hover { background: var(--brand-hover); } }
+.save-button:disabled, .login-button:disabled { opacity: .45; cursor: default; background: var(--brand); }
+
+/* Ghost text buttons are still buttons: they carry the 44px floor even though
+   they draw nothing. Inline-flex so the height lands on the box, not the text. */
+.cancel-button, .link-button, .delete-button, .quiet-offer button, .detail-connect-open, .attachment-record button {
+  display: inline-flex; align-items: center;
+  min-height: 44px;
+  border: 0; background: none; padding: 6px 0;
+  font-size: 14px; color: var(--text-secondary);
+}
+.delete-button, .attachment-remove, .attachment-record.pending button { color: var(--danger); }
+.delete-confirm { display: inline-flex; align-items: center; gap: 14px; }
+
+.compare-button, .status-chip, .comparison-tab, .attachment-picker, .related-link-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: 9px 14px;
+  font-size: 14px; color: var(--text-secondary);
+  transition: border-color var(--fast) ease, background var(--fast) ease, color var(--fast) ease;
+}
+.status-chip, .comparison-tab { border-radius: var(--radius-pill); }
+.comparison-tab { background: transparent; }
+.status-chip, .compare-button, .comparison-tab { min-height: 44px; }
+.status-chip { padding: 10px 16px; }
+.comparison-tab { padding: 6px 14px; font-size: 13px; }
+@media (hover: hover) {
+  .compare-button:hover, .status-chip:hover, .comparison-tab:hover, .attachment-picker:hover, .related-link-button:hover {
+    border-color: var(--brand); background: var(--brand-subtle); color: var(--brand-hover);
+  }
+}
+.status-chip.active, .comparison-tab.active { border-color: var(--brand); background: var(--brand-soft); color: var(--text-primary); }
+.compare-button:disabled, .related-link-button:disabled { border-color: var(--border); background: transparent; color: var(--text-muted); }
+.attachment-picker { width: max-content; cursor: pointer; color: var(--brand); }
+.related-link-button { border-style: dashed; }
+.comparison-tab span { color: var(--text-muted); }
+
+/* ─── Inputs ─────────────────────────────────────────────────────────
+   No boxed-form aesthetic. A label, a rule, and the value written on it. */
+
+.title-input, .body-input, .url-input { width: 100%; border: 0; background: transparent; outline: 0; }
+.title-input { min-height: 44px; font-size: 26px; line-height: 32px; font-weight: 600; letter-spacing: -.02em; margin-bottom: 16px; }
+.title-input::placeholder { color: var(--text-muted); font-weight: 400; }
+/* An optional title must not out-shout the writing it is optional to. */
+.title-secondary { min-height: 44px; font-size: 17px; line-height: 24px; font-weight: 500; letter-spacing: 0; margin-bottom: 10px; }
+.body-input { font-size: 16px; line-height: 26px; resize: none; min-height: 120px; overflow-y: auto; }
+/* The writing surface of a plain note: this is the thing you are typing into,
+   so it is the thing that reads as the page. */
+.body-input-tall { font-size: 19px; line-height: 30px; min-height: min(44vh, 440px); }
+.body-input::placeholder { color: var(--text-muted); }
+
+.url-input, .amount-field input, .source-field input, .product-fields input,
+.editor-fields select, .product-fields select, .related-add select, .detail-connect select, .login-card input {
+  min-width: 0; width: 100%;
+  border: 0; border-bottom: 1px solid var(--border);
+  background: transparent;
+  outline: 0;
+  padding: 11px 0;
+  font-size: 16px;
+  transition: border-color var(--fast) ease;
+}
+.url-input { margin-top: 20px; padding: 12px 0; }
+.url-input:focus, .amount-field input:focus, .source-field input:focus, .product-fields input:focus,
+.editor-fields select:focus, .product-fields select:focus, .login-card input:focus { border-color: var(--brand); }
+
+.editor-fields label, .product-fields label, .amount-field, .source-field,
+.status-field, .related-add label, .detail-connect label, .login-card label {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 12px; line-height: 16px; color: var(--text-secondary);
+}
+
+.editor-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 24px; }
+.product-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 24px; margin-top: 20px; }
+.amount-field, .source-field { margin-top: 20px; max-width: 320px; }
+.source-field { max-width: none; }
+
+.status-field { border: 0; padding: 0; margin-top: 24px; }
+.status-field legend { padding: 0; font-size: 12px; color: var(--text-secondary); }
+.status-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+/* The way out of an Add screen that guessed wrong, at the foot of the form
+   rather than across the top of it. A supplier sample and a product link have
+   no + of their own, so this is how they are reached. */
+.kind-escape { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); }
+.kind-escape > button {
+  display: inline-flex; align-items: center;
+  min-height: 44px;
+  border: 0; background: none; padding: 0;
+  font-size: 14px; color: var(--text-muted);
+}
+@media (hover: hover) { .kind-escape > button:hover { color: var(--brand); } }
+
+/* Money is the one Add screen that opens on a number. It is set at the size of
+   the name it stands in place of, so the first thing you meet is the rupees. */
+.capture-amount { max-width: none; margin-top: 8px; margin-bottom: 4px; }
+.capture-amount input { padding: 4px 0 10px; font-size: 30px; line-height: 38px; font-weight: 600; letter-spacing: -.02em; }
+.capture-amount input::placeholder { font-weight: 400; color: var(--text-muted); }
+
+/* The number the form worked out for you, said back in the same voice the
+   record will say it in. */
+.capture-outstanding { margin-top: 14px; font-size: 14px; color: var(--text-secondary); }
+.capture-outstanding strong { font-size: 17px; font-weight: 500; color: var(--text-primary); }
+
+.completed-field { display: flex !important; flex-direction: row !important; align-items: center; gap: 8px; align-self: end; padding: 10px 0; font-size: 14px !important; color: var(--text-primary) !important; }
+.completed-field input { width: 18px; height: 18px; accent-color: var(--brand); }
+
+/* ─── Note detail ────────────────────────────────────────────────────
+   A clean document. You mainly read and write. */
+
+.detail-page { width: min(var(--measure), 100%); margin: 0 auto; padding: 8px calc(var(--gutter) + env(safe-area-inset-right)) calc(120px + env(safe-area-inset-bottom)) calc(var(--gutter) + env(safe-area-inset-left)); }
+.two-pane .detail-page { padding-top: 20px; padding-bottom: 64px; }
+
+.detail-toolbar { display: flex; align-items: center; justify-content: space-between; margin: 0 -10px 32px; }
+.detail-page > .topbar { margin: 0 calc(var(--gutter) * -1) 4px; }
+/* A record fills the phone and runs long. The editor already keeps its actions
+   under the header while you scroll; reading a record used to lose the way back
+   and the ••• at the first swipe, so the two now behave the same way. */
+.app-shell:not(.two-pane) .detail-page > .topbar { z-index: 13; }
+.app-shell:not(.two-pane) .detail-toolbar {
+  position: sticky; top: var(--header-h); z-index: 12;
+  margin-bottom: 24px; padding: 4px 0;
+  background: var(--background);
+}
+/* Back is an arrow on its own, or an arrow and the name of the place it goes
+   back to. It was sized for the first and given the second: a fixed 44px box
+   with `Locations` inside it pushed the arrow off the left edge of the phone,
+   so every record opened from a view had no visible way back. The box is the
+   44px minimum and grows to whatever it is carrying. */
+.detail-back {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-width: 44px; height: 44px; justify-content: center;
+  padding: 0 10px;
+  border: 0; border-radius: var(--radius-md);
+  background: transparent; color: var(--text-secondary);
+  transition: background var(--fast) ease;
+}
+.detail-back svg { flex: none; }
+@media (hover: hover) { .detail-back:hover { background: var(--surface-muted); } }
+.saved-view .detail-back, .editor-toolbar .detail-back { justify-content: flex-start; font-size: 14px; }
+
+.detail-document { display: flex; flex-direction: column; }
+
+.detail-kicker { margin-bottom: 12px; font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--brand); }
+.detail-heading h1 { font-size: 32px; line-height: 38px; font-weight: 600; letter-spacing: -.025em; }
+.detail-meta { margin-top: 12px; font-size: 13px; line-height: 18px; color: var(--text-secondary); }
+.detail-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.detail-badges span { padding: 4px 10px; border-radius: var(--radius-pill); background: var(--brand-soft); color: var(--text-primary); font-size: 12px; font-weight: 500; }
+.detail-badges span + span { background: var(--surface-muted); color: var(--text-secondary); }
+
+.detail-body {
+  width: 100%;
+  margin-top: 28px;
+  border: 0; background: transparent;
+  padding: 0;
+  text-align: left;
+  white-space: pre-wrap;
+  font-size: 16px; line-height: 26px;
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  cursor: text;
+}
+@media (hover: hover) { .detail-body:hover { background: var(--surface-muted); box-shadow: 0 0 0 8px var(--surface-muted); } }
+.detail-body-lead { font-size: 18px; line-height: 28px; }
+.detail-body-empty { color: var(--text-muted); }
+
+/* The one place a number gets visual priority: what a thing costs. */
+.product-summary {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  margin-top: 28px; padding: 16px 0;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.product-summary-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--brand-subtle); color: var(--brand); }
+.product-summary div:not(.product-summary-icon) { display: grid; gap: 2px; }
+.product-summary small, .file-reference small { font-size: 12px; color: var(--text-muted); }
+.product-summary strong { font-size: 20px; line-height: 26px; font-weight: 500; letter-spacing: -.01em; }
+
+/* Label above, value below. Tap the value to edit. */
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; margin: 28px 0 0; border-top: 1px solid var(--border); }
+.detail-grid div { padding: 16px 0; border-bottom: 1px solid var(--border); }
 .detail-grid div:nth-child(odd) { padding-right: 24px; }
-.detail-grid div:nth-child(even) { padding-left: 24px; border-left: 1px solid #ebe5df; }
-.detail-grid dt { margin-bottom: 7px; color: #8a8078; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
-.detail-grid dd { margin: 0; font-size: 15px; line-height: 1.45; }
-.primary-link { width: max-content; display: inline-flex; align-items: center; gap: 9px; margin-top: 34px; padding: 12px 16px; border-radius: 7px; background: #c9823f; color: white; text-decoration: none; font-size: 14px; }
-.file-reference { display: flex; align-items: center; gap: 13px; margin-top: 32px; padding: 18px 0; border-top: 1px solid #ebe5df; border-bottom: 1px solid #ebe5df; color: #8c5d35; }
-.file-reference div { display: grid; gap: 4px; color: #332b25; }
-.detail-attachments { margin-top: 38px; }
-.detail-attachments h2 { font-size: 16px; font-weight: 500; }
-.detail-attachments button { width: 100%; display: flex; align-items: center; gap: 10px; border: 0; border-bottom: 1px solid #ebe5df; background: transparent; padding: 14px 0; text-align: left; }
-.detail-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 72px; padding-top: 24px; border-top: 1px solid #e8e2dc; }
-.detail-footer div { display: grid; gap: 6px; }
-.detail-footer span { color: #8a8078; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.detail-grid div:nth-child(even) { padding-left: 24px; border-left: 1px solid var(--border); }
+.detail-grid dt { margin-bottom: 5px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.detail-grid dd { margin: 0; font-size: 15px; line-height: 22px; }
+
+.primary-link { width: max-content; margin-top: 28px; }
+
+.file-reference { display: flex; align-items: center; gap: 12px; margin-top: 28px; padding: 16px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); color: var(--brand); }
+.file-reference div { display: grid; gap: 3px; color: var(--text-primary); }
+.file-reference strong { font-size: 15px; font-weight: 500; }
+
+.detail-attachments, .detail-related { margin-top: 32px; }
+.detail-attachments h2, .detail-related h2 { margin-bottom: 4px; font-size: 14px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.detail-attachments button { width: 100%; display: flex; align-items: center; gap: 12px; border: 0; border-bottom: 1px solid var(--border); background: transparent; padding: 12px 0; text-align: left; font-size: 15px; }
+@media (hover: hover) { .detail-attachments button:hover { background: var(--surface-muted); } }
+
+.detail-related-empty { margin-top: 8px; font-size: 14px; color: var(--text-muted); }
+.detail-related-row { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); }
+.detail-related-open { flex: 1; min-width: 0; display: grid; gap: 3px; border: 0; background: transparent; padding: 13px 0; text-align: left; }
+.detail-related-open span { font-size: 15px; }
+.detail-related-open small { font-size: 12px; color: var(--text-muted); }
+.detail-related-remove { flex: none; display: inline-flex; border: 0; background: none; padding: 8px; color: var(--danger); }
+.detail-connect-open { gap: 7px; margin-top: 12px; color: var(--brand); }
+.detail-connect { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 14px 24px; margin-top: 16px; }
+.detail-connect-actions { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
+
+.detail-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border); }
+.detail-footer div { display: grid; gap: 5px; }
+.detail-footer span { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
 .detail-footer strong { font-size: 13px; font-weight: 500; }
 
-@media (max-width: 1050px) {
-  .topbar { grid-template-columns: 200px 1fr 110px; padding: 0 24px; }
-  .nav { gap: 20px; }
+/* ─── Editor ─────────────────────────────────────────────────────────── */
+
+.editor-page { width: min(var(--measure), 100%); margin: 0 auto; padding: 0 calc(var(--gutter) + env(safe-area-inset-right)) calc(96px + env(safe-area-inset-bottom)) calc(var(--gutter) + env(safe-area-inset-left)); }
+
+.editor-toolbar {
+  position: sticky; top: 0; z-index: 12;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin: 0 -10px 32px;
+  padding: 12px 0;
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
 }
-@media (max-width: 800px) {
-  .topbar { height: 72px; grid-template-columns: 42px 1fr auto; padding: 0 18px; border-bottom: 1px solid #eee9e3; }
-  .mobile-menu { display: grid; }
-  .brand { font-size: 18px; }
-  .nav { display: none; position: absolute; top: 72px; left: 0; right: 0; height: auto; padding: 18px; background: #fdfcf9; flex-direction: column; gap: 4px; box-shadow: 0 14px 24px rgba(30,20,12,.06); }
-  .nav.nav-open { display: flex; }
-  .nav-item { text-align: left; padding: 12px; }
-  .nav-item.active::after { left: 0; right: auto; bottom: 10px; top: 10px; width: 2px; height: auto; }
-  .top-actions { gap: 12px; }
-  .avatar { width: 36px; height: 36px; }
-  .home { margin-top: 90px; }
-  .home h1 { margin-bottom: 42px; }
-  .home textarea { font-size: 21px; min-height: 220px; }
-  .capture-actions { gap: 15px; }
-  .save-button { margin-left: 12px; padding: 11px 24px; }
-  .section-page { margin-top: 48px; }
-  .global-search { top: 84px; }
-  .section-heading { align-items: flex-start; flex-direction: column; gap: 14px; margin-bottom: 28px; }
-  .section-actions { gap: 14px; flex-wrap: wrap; }
-  .item-meta { display: none; }
-  .editor { padding: 28px 24px; }
-  .editor-fields { grid-template-columns: 1fr; }
-  .reference-import { align-items: flex-start; flex-direction: column; }
-  .reference-import button { width: 100%; }
-  .sample-empty { grid-template-columns: auto 1fr; }
-  .sample-empty button { grid-column: 1 / -1; width: 100%; }
-  .sample-overview { grid-template-columns: 1fr repeat(3, auto); gap: 18px; }
-  .sample-overview button { grid-column: 1 / -1; justify-content: center; }
-  .launch-checklist { padding: 18px 16px 8px; }
-  .launch-checklist > header div { gap: 10px; }
-  .equipment-comparison { padding: 18px 16px 8px; }
-  .equipment-comparison > header { align-items: flex-start; flex-direction: column; gap: 12px; }
-  .money-overview > header { align-items: flex-start; flex-direction: column; }
-  .money-actions { width: 100%; justify-content: space-between; }
-  .money-totals { grid-template-columns: 1fr; }
-  .money-totals > div + div { padding-left: 0; border-left: 0; }
-  .detail-page { width: min(100% - 36px, 900px); margin-top: 30px; }
-  .detail-toolbar { margin-bottom: 48px; }
-  .detail-heading h1 { font-size: 34px; }
-  .detail-body { font-size: 16px; }
-  .detail-grid, .detail-footer { grid-template-columns: 1fr; }
-  .detail-grid div:nth-child(odd), .detail-grid div:nth-child(even) { padding: 18px 0; border-left: 0; }
-  .product-fields { grid-template-columns: 1fr; }
+/* With the workspace header above it, the header is what sticks to the top and
+   the actions sit under it — one band, in the order you read them. */
+.editor-page.has-header { padding-top: 0; }
+.editor-page.has-header .topbar {
+  position: sticky; top: 0; z-index: 13;
+  margin: 0 calc(var(--gutter) * -1);
+}
+/* Under the header, not 12px behind it: the offset used to be a guess, so
+   scrolling a long record slid the top of Save and Cancel out of sight. */
+.editor-page.has-header .editor-toolbar { top: var(--header-h); margin-top: 0; }
+.editor-toolbar-actions { display: inline-flex; align-items: center; gap: 16px; }
+.editor-document { display: flex; flex-direction: column; }
+.editor-document > * { flex: 0 0 auto; }
+.editor-document .eyebrow { margin: 0 0 12px; }
+
+.kind-switch { margin-bottom: 20px; }
+.kind-current { font-size: 14px; color: var(--text-secondary); }
+.kind-current button { display: inline-flex; align-items: center; min-height: 44px; border: 0; background: none; padding: 0 0 0 10px; font-size: 14px; color: var(--brand); text-decoration: underline; }
+.kind-options { display: grid; gap: 2px; }
+.kind-option { display: grid; gap: 2px; border: 0; border-radius: var(--radius-md); background: transparent; padding: 11px 12px; text-align: left; transition: background var(--fast) ease; }
+@media (hover: hover) { .kind-option:hover { background: var(--surface-muted); } }
+.kind-option.active { background: var(--brand-subtle); }
+.kind-option-name { font-size: 15px; }
+.kind-option-hint { font-size: 13px; color: var(--text-muted); }
+
+/* `+ Details` — folded away until the structure is actually useful. */
+.editor-group { border-top: 1px solid var(--border); }
+.editor-group:first-of-type { margin-top: 8px; }
+.editor-group-head { width: 100%; display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 15px 0; font-size: 14px; text-align: left; }
+.editor-group-head em { margin-left: auto; font-style: normal; font-size: 12px; color: var(--text-muted); }
+.editor-group-chevron { flex: none; color: var(--text-muted); transition: transform var(--fast) ease; }
+.editor-group.open .editor-group-chevron { transform: rotate(90deg); }
+.editor-group-body { padding-bottom: 28px; }
+.editor-group-body .product-fields { margin-top: 0; }
+
+.attachment-area { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); display: grid; gap: 8px; font-size: 14px; color: var(--text-secondary); }
+.attachment-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.attachment-heading > span { font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.attachment-heading small { font-size: 12px; color: var(--text-muted); }
+.attachment-record { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); padding: 10px 0; }
+.attachment-record > span, .attachment-record > .attachment-open { flex: 1; min-width: 0; }
+.attachment-record > span, .attachment-open { min-width: 0; display: grid; gap: 3px; overflow-wrap: anywhere; text-align: left; }
+.attachment-record small { font-size: 12px; color: var(--text-muted); }
+.attachment-open { border: 0; background: none; padding: 0; color: var(--brand); font-size: 14px; }
+.attachment-record.removing > span, .attachment-record.removing small { color: var(--danger); }
+
+.related-area { margin-top: 0; }
+.related-hint { margin-bottom: 12px; font-size: 13px; color: var(--text-muted); }
+.related-record { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); padding: 10px 0; }
+.related-record > span { min-width: 0; display: grid; gap: 3px; overflow-wrap: anywhere; font-size: 14px; }
+.related-record small { font-size: 12px; color: var(--text-muted); }
+.related-record.incoming > span { color: var(--text-secondary); }
+.related-record button { border: 0; background: none; padding: 6px 0; font-size: 12px; color: var(--danger); }
+.related-add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 14px 24px; margin-top: 14px; }
+
+.discard-scrim { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(43, 37, 33, .22); animation: fade var(--fast) ease; }
+.discard-panel { width: min(360px, calc(100% - 40px)); padding: 24px 24px 18px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-panel); display: grid; gap: 8px; }
+.discard-panel strong { font-size: 17px; font-weight: 600; }
+.discard-panel p { font-size: 14px; color: var(--text-secondary); }
+.discard-actions { display: flex; align-items: center; justify-content: flex-end; gap: 16px; margin-top: 12px; }
+.discard-actions button { border: 0; background: none; padding: 8px 0; font-size: 14px; }
+
+/* ─── Saved-view widgets ─────────────────────────────────────────────
+   No boxes. Each one is a heading, a rule, and its rows. */
+
+.launch-checklist, .equipment-comparison, .library-files, .location-scouting { margin: 20px 0 28px; }
+.launch-checklist > header, .library-files > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.launch-checklist > header span, .library-files > header strong { font-size: 14px; font-weight: 500; }
+.library-files > header > div { display: inline-flex; align-items: baseline; gap: 8px; }
+.library-files > header span { font-size: 12px; color: var(--text-muted); }
+
+.checklist-progress { height: 3px; overflow: hidden; margin: 14px 0 24px; border-radius: var(--radius-pill); background: var(--surface-muted); }
+.checklist-progress span { display: block; height: 100%; background: var(--brand); transition: width var(--normal) ease; }
+
+.checklist-list { margin-bottom: 0; }
+.checklist-row { display: flex; align-items: flex-start; border-bottom: 1px solid var(--border); }
+.checklist-row .check-toggle { margin-top: 13px; }
+.check-title { flex: 1; min-width: 0; border: 0; background: transparent; padding: 12px 0; text-align: left; font-size: 16px; line-height: 22px; }
+.checklist-row.checked .check-title { color: var(--text-muted); text-decoration: line-through; }
+.checklist-error { margin-top: 8px; font-size: 13px; color: var(--danger); }
+
+/* Three numbers as a sentence, not a wall of tiles. */
+.money-totals, .sample-overview { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 28px; margin: 16px 0 24px; }
+.money-totals > span, .sample-stat { display: inline-flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+.money-totals strong, .sample-stat strong { font-size: 17px; font-weight: 500; color: var(--text-primary); }
+.sample-stat { border: 0; border-radius: var(--radius-sm); background: transparent; padding: 4px 8px; margin: -4px -8px; }
+@media (hover: hover) { .sample-stat:hover { background: var(--surface-muted); } }
+.sample-stat.active { background: var(--brand-subtle); }
+
+.comparison-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 16px; font-size: 13px; color: var(--text-secondary); }
+.comparison-toolbar-actions { display: inline-flex; align-items: center; gap: 14px; }
+.comparison-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.comparison-list { margin-top: 8px; }
+.comparison-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); padding: 11px 0; }
+.comparison-row.selected { background: var(--brand-subtle); }
+/* The box stays 18px; the label around it is the 44px a thumb needs. */
+.comparison-select { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; margin: 0 -13px; }
+.comparison-select input { width: 18px; height: 18px; accent-color: var(--brand); }
+.comparison-open { min-width: 0; min-height: 44px; display: grid; align-content: center; gap: 3px; border: 0; background: none; padding: 0; text-align: left; }
+.comparison-open strong { font-size: 15px; font-weight: 500; }
+.comparison-open small { font-size: 12px; color: var(--text-muted); }
+.comparison-price { font-size: 14px; white-space: nowrap; }
+.comparison-status { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.comparison-empty { margin: 16px 0; font-size: 14px; color: var(--text-muted); }
+
+.comparison-scroll { overflow-x: auto; }
+.comparison-scroll table, .compare-table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 14px; margin-top: 14px; }
+.comparison-scroll th, .compare-table th { text-align: left; font-weight: 500; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); padding: 0 14px 8px 0; vertical-align: bottom; }
+.comparison-scroll td, .compare-table td, .compare-table tbody th { padding: 11px 14px 11px 0; border-top: 1px solid var(--border); vertical-align: top; color: var(--text-secondary); }
+.compare-table tbody th { white-space: nowrap; }
+.comparison-scroll td button, .compare-table thead button { border: 0; background: none; padding: 0; text-align: left; font-size: 14px; text-transform: none; letter-spacing: 0; color: var(--text-primary); }
+
+.library-list { margin-top: 8px; }
+.library-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); align-items: center; gap: 16px; border-bottom: 1px solid var(--border); padding: 11px 0; }
+.library-open, .library-parent { min-width: 0; min-height: 44px; display: grid; align-content: center; gap: 3px; border: 0; background: none; padding: 0; text-align: left; overflow-wrap: anywhere; color: inherit; text-decoration: none; cursor: pointer; }
+.library-open { grid-template-columns: 40px minmax(0, 1fr); align-items: center; column-gap: 12px; row-gap: 3px; }
+.library-open .thumb { grid-row: 1 / span 2; }
+@media (hover: hover) { .library-open:hover strong { color: var(--brand-hover); } }
+.library-open strong { font-size: 14px; font-weight: 500; }
+.library-open small, .library-parent small { font-size: 12px; color: var(--text-muted); }
+.library-parent, .library-parent small { text-align: right; }
+.library-parent span { font-size: 13px; color: var(--brand); }
+
+/* Image thumbnails: 10px, per the token table. */
+.thumb { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; background: var(--surface-muted); }
+.thumb-icon { display: grid; place-items: center; color: var(--brand); }
+
+/* ─── Quiet offers & messages ────────────────────────────────────────
+   One sentence instead of an onboarding card. */
+
+.quiet-offer { margin: 20px 0; font-size: 14px; line-height: 22px; color: var(--text-secondary); }
+.quiet-offer button { padding: 0; color: var(--brand); text-decoration: underline; }
+.quiet-offer em { display: block; margin-top: 6px; font-style: normal; color: var(--danger); }
+.import-message { margin: 0 0 20px; font-size: 13px; color: var(--text-secondary); }
+
+/* ─── Workspace state ────────────────────────────────────────────────── */
+
+.workspace-loading { display: grid; place-items: center; padding: 96px 20px; color: var(--text-muted); }
+.workspace-error, .workspace-offline, .workspace-warning {
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 var(--gutter) 16px;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 13px; line-height: 18px;
+}
+.workspace-error { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--border); }
+.workspace-offline, .workspace-warning { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--border); }
+.workspace-warning button { margin-left: auto; display: inline-flex; border: 0; background: none; padding: 2px; color: inherit; }
+
+/* ─── Login ──────────────────────────────────────────────────────────── */
+
+.auth-loading { min-height: 100vh; display: grid; place-items: center; color: var(--text-muted); }
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 28px; text-align: center; }
+.login-card { width: min(380px, 100%); }
+.login-logo { display: block; width: min(240px, 68%); height: auto; margin: 0 auto 28px; }
+.login-card h1 { font-size: 28px; line-height: 32px; font-weight: 600; letter-spacing: -.02em; }
+.login-card h1 + form { margin-top: 32px; }
+.login-card form { display: flex; flex-direction: column; gap: 22px; text-align: left; }
+.login-button { margin-top: 6px; }
+.auth-error { margin-top: -6px; font-size: 13px; color: var(--danger); }
+
+/* ─── Responsive ─────────────────────────────────────────────────────
+   Mobile 0–767 · Tablet 768–1023 · Desktop 1024+ */
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .screen, .detail-page, .editor-page { width: min(var(--measure), 100%); margin: 0 auto; }
+}
+
+@media (max-width: 767px) {
+  .editor-fields, .product-fields, .detail-grid, .detail-footer, .related-add, .detail-connect { grid-template-columns: minmax(0, 1fr); }
+  .detail-grid div:nth-child(odd), .detail-grid div:nth-child(even) { padding: 16px 0; border-left: 0; }
+  .detail-heading h1 { font-size: 28px; line-height: 34px; }
+  /* One row. This used to push the actions onto a line of their own, which
+     was right when the toolbar was the whole top of the page and carried Back,
+     Delete, Cancel and Save. With the header above it there is room, and two
+     stacked rows of chrome before the writing is a lot of ceremony. */
+  .editor-toolbar { flex-wrap: wrap; gap: 8px 12px; margin-bottom: 24px; }
+  .editor-toolbar-actions { justify-content: flex-end; gap: 12px; }
+  .editor-toolbar .detail-back { padding-left: 0; }
+  .related-link-button { width: 100%; }
+  .comparison-row { grid-template-columns: 28px minmax(0, 1fr) auto; row-gap: 4px; }
+  .comparison-status { grid-column: 2 / -1; }
+  .library-row { grid-template-columns: 1fr; gap: 6px; }
+  /* Stacked, the record a file hangs off sits under the file's name rather
+     than out at the thumbnail's edge, where it read as a second row. */
+  .library-parent { padding-left: 52px; }
+  .library-parent, .library-parent small { text-align: left; }
+  .money-totals, .sample-overview { gap: 8px 20px; }
+}
+
+/* A record's own next steps. Same box, same line height and same struck-through
+   finish as the launch checklist, because ticking a thing off is one gesture
+   wherever it happens. */
+.record-checklist { margin-top: 32px; }
+.record-checklist h2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; font-size: 14px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.record-checklist h2 span { font-size: 12px; letter-spacing: 0; text-transform: none; }
+.record-task { display: flex; align-items: flex-start; gap: 4px; border-bottom: 1px solid var(--border); }
+.record-task .check-toggle { margin-top: 13px; }
+.record-task-text { flex: 1; min-width: 0; border: 0; background: transparent; padding: 12px 0; text-align: left; font-size: 16px; line-height: 22px; color: var(--text-primary); }
+.record-task.done .record-task-text { color: var(--text-muted); text-decoration: line-through; }
+.record-task-edit { flex: 1; min-width: 0; border: 0; border-bottom: 1px solid var(--brand); background: transparent; padding: 12px 0; font: inherit; font-size: 16px; line-height: 22px; color: var(--text-primary); }
+/* The row controls stay out of the way until the row is under the pointer, so a
+   list of five steps reads as five sentences rather than fifteen buttons. */
+.record-task-actions { flex: none; display: inline-flex; align-items: center; gap: 2px; opacity: 0; transition: opacity var(--fast) ease; }
+.record-task:hover .record-task-actions,
+.record-task:focus-within .record-task-actions { opacity: 1; }
+/* A thumb never hovers, so on a touch screen they are simply always there. */
+@media (hover: none) { .record-task-actions { opacity: 1; } }
+.record-task-actions button { display: inline-flex; border: 0; background: none; padding: 8px 4px; color: var(--text-muted); }
+@media (hover: hover) { .record-task-actions button:hover:not(:disabled) { color: var(--text-primary); } }
+.record-task-actions button:disabled { opacity: .3; }
+.record-task-add { display: flex; align-items: center; gap: 10px; padding-left: 2px; color: var(--text-muted); }
+.record-task-add input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 12px 0; font: inherit; font-size: 16px; line-height: 22px; color: var(--text-primary); }
+.record-task-add input::placeholder { color: var(--text-muted); }
+
+/* The menu is read by category on the wall, so it is listed by category here.
+   Same heading weight as a list group — a group, not a section. */
+.menu-group { margin-bottom: 28px; }
+.menu-group h2 { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.menu-group h2 span { letter-spacing: 0; }
+
+/* The welcome on a workspace with nothing in it. It leads the screen rather
+   than trailing nine pins, so it needs no growing room of its own. */
+.empty-state.welcome { padding: 8px 0 24px; }
+
+/* ─── Per-view presentation ──────────────────────────────────────────
+   Every pin answers a different question, so every pin gets the shape that
+   answers it. What they share is the type scale, the rules and the spacing —
+   not the row. */
+
+/* "6 properties · 2 shortlisted · ₹19k–₹25k rent". One sentence under the
+   heading, in place of a strip of dashboard tiles. */
+.view-summary { margin: 2px 0 18px; font-size: 14px; line-height: 20px; color: var(--text-secondary); }
+
+/* A property and a machine are chosen by reading numbers down a column, so the
+   columns get names. Below the table's width the headings would be lying about
+   what lines up under them, so they go and each cell says its own name. */
+.property-head, .equipment-head {
+  display: grid; align-items: end; gap: 12px;
+  padding: 0 0 8px; border-bottom: 1px solid var(--border);
+  font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted);
+}
+.property-table .comparison-row, .property-head { grid-template-columns: minmax(0, 1fr) minmax(0, .8fr) minmax(84px, auto) minmax(76px, auto) minmax(84px, auto); }
+.property-table.selectable .comparison-row, .property-table.selectable .property-head { grid-template-columns: 28px minmax(0, 1fr) minmax(0, .8fr) minmax(84px, auto) minmax(76px, auto) minmax(84px, auto); }
+.equipment-table .comparison-row, .equipment-head { grid-template-columns: minmax(0, 1fr) minmax(96px, auto) minmax(96px, auto); }
+.equipment-table.selectable .comparison-row, .equipment-table.selectable .equipment-head { grid-template-columns: 28px minmax(0, 1fr) minmax(96px, auto) minmax(96px, auto); }
+.property-area, .property-size { font-size: 13px; color: var(--text-secondary); }
+.property-size { white-space: nowrap; }
+
+/* The launch percentage, beside the fraction it draws. */
+.checklist-percent { color: var(--text-muted); }
+
+/* The catalog row. Three questions answered without opening anything: what is
+   it, what does it cost, is it ready. Recipe, supplier and taste score stay
+   inside the record — those are read one drink at a time, not down a column. */
+.item-row.compact .item-copy { gap: 1px; }
+.item-row.compact .item-open { padding: 9px 0; }
+.item-row.has-trailing .item-open { grid-template-columns: minmax(0, 1fr) auto auto; }
+/* A catalog is read down its columns, so the columns have to be columns. Left
+   to size themselves, "Doing" and "Waiting" pull the price left and right by a
+   few pixels a row and the whole thing goes ragged. */
+.item-row.has-trailing .item-meta { min-width: 56px; text-align: right; }
+.item-trailing { padding-left: 16px; font-size: 14px; line-height: 22px; white-space: nowrap; }
+.item-row.done .item-trailing { color: var(--text-muted); }
+
+/* A supplier row answers three things — who, where, and what they can sell us.
+   The third line is the reason they are on the list at all. */
+.supplier-categories { color: var(--text-secondary); }
+
+/* Marketing reads down its channels, so it borrows the Menu's group heading.
+   The rows are the shared row, and what a contact reaches and would make is
+   the note line on it. */
+.marketing-list .menu-group:last-child { margin-bottom: 0; }
+
+/* A part-paid purchase cannot be said on one line: "₹40,000 · Part paid" hides
+   the only two numbers you wanted. */
+.money-entry .item-row { border-bottom: 0; }
+.money-entry { border-bottom: 1px solid var(--border); }
+.money-split { margin: -6px 0 10px; font-size: 13px; color: var(--text-secondary); }
+.money-activity .eyebrow { margin-top: 4px; }
+
+/* ─── Record pages ───────────────────────────────────────────────────
+   PROPERTY, CONTACT, COMMERCIAL. A record is read in small headed blocks; one
+   flat grid of every field that happens to be set is what made a location and
+   a drink look like the same record with different words in it. */
+.detail-section { margin-top: 28px; }
+.detail-section h2 {
+  margin-bottom: 2px; font-size: 12px; line-height: 16px; font-weight: 500;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted);
+}
+.detail-section .detail-grid { margin-top: 0; }
+
+.supplier-catalogue-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px; width: 100%;
+  border: 0; border-bottom: 1px solid var(--border); background: none; padding: 11px 0;
+  text-align: left; font-size: 15px; line-height: 22px; color: inherit;
+}
+@media (hover: hover) { .supplier-catalogue-row:hover { color: var(--brand-hover); } }
+.supplier-catalogue-row small { flex: none; font-size: 13px; color: var(--text-muted); }
+
+/* A note is one sentence. An empty NEXT STEPS heading with an input under it
+   turns that sentence into a form, so empty it is one small invitation. */
+.record-checklist-offer {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 28px;
+  min-height: 44px;
+  border: 0; background: none; padding: 6px 0; font-size: 14px; color: var(--text-muted);
+}
+@media (hover: hover) { .record-checklist-offer:hover { color: var(--brand); } }
+
+@media (max-width: 720px) {
+  /* Two lines rather than three columns: there is no width to read a price
+     column down, so the price sits with the status under the name. */
+  .item-row.has-trailing .item-open { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
+  .item-row.has-trailing .item-copy { grid-column: 1 / -1; }
+  .item-trailing { grid-column: 1; padding-left: 0; }
+
+  /* Column headings stop describing anything once the row wraps. */
+  .property-head, .equipment-head { display: none; }
+  .property-table .comparison-row, .property-table.selectable .comparison-row,
+  .equipment-table .comparison-row, .equipment-table.selectable .comparison-row {
+    grid-template-columns: 28px minmax(0, 1fr) auto; row-gap: 4px;
+  }
+  .property-area, .property-size, .comparison-price, .comparison-status { grid-column: 2 / -1; }
+  .property-area::before, .property-size::before, .comparison-price::before, .comparison-status::before {
+    content: attr(data-label) ' '; color: var(--text-muted);
+  }
+}
+
+/* ─── Writing tools ──────────────────────────────────────────────────
+   Aa ☑︎ 📎 + Details, sitting under the writing. Quiet enough to ignore
+   while typing, close enough to reach without leaving the thought. */
+
+.write-tools {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  margin: 10px 0 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.write-tool {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-width: 44px; min-height: 44px;
+  padding: 0 10px;
+  border: 0; border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 14px; color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--fast) ease, color var(--fast) ease;
+}
+.write-tool[aria-expanded="true"] { background: var(--surface-muted); color: var(--text-primary); }
+@media (hover: hover) { .write-tool:hover { background: var(--surface-muted); color: var(--text-primary); } }
+/* The Aa button is a word, so it needs the weight the icons get from their strokes. */
+.write-style > .write-tool { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.write-tool-details { margin-left: auto; color: var(--brand); }
+
+.write-style { position: relative; }
+.write-style-menu {
+  position: absolute; z-index: 30; bottom: calc(100% + 6px); left: 0;
+  display: flex; flex-direction: column;
+  min-width: 168px; padding: 6px;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgb(43 37 33 / .12);
+}
+.write-style-menu button {
+  border: 0; border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 9px 10px;
+  text-align: left; font-size: 14px; color: var(--text-primary);
+  cursor: pointer;
+}
+@media (hover: hover) { .write-style-menu button:hover { background: var(--surface-muted); } }
+
+/* ─── Writing, read back ─────────────────────────────────────────────
+   A note with boxes in it is read as a checklist, not as the characters
+   that make one. Everything else on the page still opens for writing on
+   a tap, so the box is the only thing that does not. */
+
+.detail-body-rich { white-space: normal; cursor: default; }
+@media (hover: hover) { .detail-body-rich:hover { background: transparent; box-shadow: none; } }
+.body-line, .body-bullet, .body-heading, .body-task { cursor: text; }
+.body-line { margin: 0; white-space: pre-wrap; }
+.body-gap { height: 12px; }
+.body-heading { margin: 22px 0 6px; font-size: 16px; font-weight: 600; line-height: 24px; }
+.body-heading:first-child { margin-top: 0; }
+/* The second level is set apart by weight and colour rather than by another
+   size, so a pasted document keeps its structure without the writing area
+   turning into a type specimen. */
+.body-subheading {
+  margin: 16px 0 4px;
+  font-size: 13px; font-weight: 600; line-height: 20px;
+  letter-spacing: .05em; text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.body-subheading:first-child { margin-top: 0; }
+.body-bullet { display: flex; gap: 10px; }
+.body-bullet span:first-child { flex: none; min-width: 16px; color: var(--text-muted); }
+
+.body-task { display: flex; align-items: flex-start; gap: 0; }
+/* The shared box is spaced for a list row; inside writing it sits on the line. */
+.body-task .check-toggle { margin: 4px 10px 0 0; }
+.body-task-text {
+  flex: 1;
+  border: 0; background: transparent; padding: 0;
+  text-align: left; white-space: pre-wrap;
+  font-size: inherit; line-height: inherit; color: inherit;
+  cursor: text;
+}
+.body-task.done .body-task-text { color: var(--text-muted); text-decoration: line-through; }
+
+/* The writing announced as a block, on records where it is one block of
+   several rather than the whole record. */
+.detail-body-heading {
+  margin: 30px 0 -18px;
+  font-size: 14px; font-weight: 500; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+
+/* ─── An unanswered question ─────────────────────────────────────────
+   A dash is the record saying "we still need to find this out". It is
+   quieter than an answer and louder than nothing at all. */
+
+.detail-grid .detail-unanswered dd { color: var(--text-muted); }
+
+/* A category is a name, not a record, so it does not offer to open. */
+.supplier-catalogue-name {
+  margin: 0;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+}
+
+/* A view with nothing in it says what it is for and stops. The + is already
+   on the heading line beside it; a second Add here was the same button twice. */
+.view-summary-empty { display: grid; gap: 4px; max-width: 42ch; }
+.view-summary-empty em { font-style: normal; color: var(--text-muted); }
+
+/* A link in the writing. Underlined rather than coloured-only, so it is still
+   a link to somebody who cannot tell the colour from the text around it. */
+.body-link {
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  /* A long address must wrap inside the note rather than push it sideways. */
+  overflow-wrap: anywhere;
+}
+@media (hover: hover) { .body-link:hover { color: var(--brand-hover); } }
+
+/* The writing on a structured record, announced the way its other blocks are.
+   On a note there is no heading: the writing is the record. */
+.editor-writing-heading {
+  margin: 26px 0 6px;
+  font-size: 13px; font-weight: 500; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+
+/* ─── Photographs on a record ────────────────────────────────────────
+   Shown at a size you can read. A storefront, a price list or a
+   competitor's menu is the whole reason the camera button exists; at
+   40px beside a filename it might as well not be there. */
+
+.detail-photos { margin-top: 32px; }
+.detail-photos h2 {
+  margin-bottom: 10px;
+  font-size: 14px; font-weight: 500; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+  gap: 12px;
+}
+.detail-photo {
+  display: grid; gap: 6px;
+  border: 0; padding: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.detail-photo img, .detail-photo-placeholder {
+  width: 100%;
+  /* Tall enough to read, capped so one photo does not take the whole pane. */
+  aspect-ratio: 4 / 3; max-height: 320px;
+  border-radius: var(--radius-md);
+  /* The whole photograph, not a crop of it. A storefront shot cropped to 4:3
+     loses the shopfront; a receipt cropped loses the total. Letterboxing on a
+     tall photo is a smaller price than not being able to read it. */
+  object-fit: contain;
+  background: var(--surface-muted);
+}
+.detail-photo-placeholder {
+  display: grid; place-items: center; align-content: center; gap: 8px;
+  padding: 12px; text-align: center;
+  color: var(--text-muted);
+}
+.detail-photo-placeholder em { font-style: normal; font-size: 12px; line-height: 16px; }
+.detail-photo small {
+  font-size: 12px; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+@media (hover: hover) { .detail-photo:hover img { opacity: .9; } }
+@media (hover: hover) { .detail-photo:hover small { color: var(--brand-hover); } }
+
+/* A photo in the editor, beside its filename. Small — this is the list of what
+   is attached, not the wall you look at — but a picture rather than a name. */
+.attachment-preview, .attachment-preview-wrap .thumb {
+  flex: none;
+  width: 56px; height: 56px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface-muted);
+}
+.attachment-preview-wrap { display: inline-flex; }
+
+/* ─── Writing a launch task ──────────────────────────────────────────
+   A task is a line of text. Typing one belongs on the list it joins,
+   not behind a full record page. */
+
+/* The last task already draws a rule, so this row does not draw a second one
+   14px under it — the record's own NEXT STEPS never did. */
+.checklist-add {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--text-muted);
+  padding: 10px 0 10px 2px;
+}
+.checklist-add > input {
+  flex: 1; min-width: 0;
+  min-height: 44px;
+  border: 0; background: transparent; outline: 0;
+  font-size: 16px; line-height: 22px; color: var(--text-primary);
+}
+.checklist-add > input::placeholder { color: var(--text-muted); }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px;
+  margin: -1px; padding: 0; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+/* Renaming a task where it sits. Same metrics as the title it replaces, so
+   the row does not jump when you start typing. */
+/* Same metrics as the title it replaces, and 16px so tapping into it does not
+   zoom the page on iOS. The title moved with it, so the row never jumps. */
+.check-title-edit {
+  flex: 1; min-width: 0;
+  border: 0; background: transparent; outline: 0;
+  padding: 12px 0;
+  font-size: 16px; line-height: 22px; color: var(--text-primary);
 }

@@ -1,360 +1,557 @@
-import { useMemo, useRef, useState } from 'react'
-import { DollarSign, File as FileIcon, FileText, FlaskConical, Image, Link2, ListChecks, MapPin, Menu as MenuIcon, Package, Paperclip, Plus, Search, X } from 'lucide-react'
-import { EquipmentComparison } from './components/EquipmentComparison'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowLeft, Plus, X } from 'lucide-react'
+import { workspaceEmail } from './AuthGate'
+import { BottomSheet, SheetOption } from './components/BottomSheet'
+import { Editor } from './components/Editor'
 import { ItemDetail } from './components/ItemDetail'
-import { LaunchChecklist } from './components/LaunchChecklist'
-import { LocationScoutingOverview } from './components/LocationScoutingOverview'
-import { MoneyOverview } from './components/MoneyOverview'
-import { SupplierSampleOverview } from './components/SupplierSampleOverview'
-import { sectionAreas, starterItems } from './data'
-import { useWorkspaceItems } from './hooks/useWorkspaceItems'
+import { ItemRow, statusIsTelling } from './components/ItemRow'
+import { SavedViewBody, needsYou as itemNeedsYou, savedViewCount, savedViewSummary, savedViews, type SavedViewId } from './components/SavedView'
+import { useWorkspaceItems, type OutgoingLink, type SyncState } from './hooks/useWorkspaceItems'
+import { defaultsForKind, sectionKinds } from './itemShapes'
 import { createId } from './lib/ids'
-import { formatRupees } from './lib/money'
+import { suggestTitle, suggestTitleFromFiles, suggestTitleFromUrl } from './lib/suggestTitle'
+import { writeTasks, type RecordTask } from './lib/tasks'
 import { supabase } from './lib/supabase'
-import type { ItemKind, ItemStatus, Section, WorkspaceItem } from './types'
+import { finishedStatus, initialStatus, type ItemKind, type Section, type WorkspaceAttachment, type WorkspaceItem } from './types'
 
-const sections: Array<'Home' | Section> = ['Home', 'Notes', 'Menu', 'Suppliers', 'Store Setup', 'Marketing', 'Money', 'Library']
+// The whole app is one notebook. There is no bottom navigation, no drawer and
+// no module tabs: a header and a floating +. Anything
+// that used to be a tab is a pinned view in the Inbox, which is what the spec
+// means by "pins are the lightweight replacement for a dashboard".
 
-function matchItems(pool: WorkspaceItem[], rawQuery: string) {
-  const needle = rawQuery.trim().toLowerCase()
-  if (!needle) return pool
-  return pool.filter(item => [
-    item.title, item.body, item.section, item.area, item.url, item.status, item.source,
-    ...Object.values(item.details ?? {}),
-  ].some(value => value?.toLowerCase().includes(needle)))
+type Screen = 'inbox' | SavedViewId
+
+const STALE_AFTER_DAYS = 7
+
+// A box beside a supplier asks a question suppliers do not answer, and a box
+// beside a note asks one a thought does not either — a note is something you
+// wrote, not something you finish. Only a task carries one. Anything else that
+// needs finishing becomes a task, which is the whole reason tasks exist.
+const completable = (item: WorkspaceItem) => item.kind === 'Checklist'
+
+// A record that arrived with a starter pack and has not been touched since.
+// The importer stamps createdAt and updatedAt identically, so the two being
+// equal is exactly "nobody has done anything to this yet".
+const isUntouchedImport = (item: WorkspaceItem) => Boolean(item.importKey) && item.createdAt === item.updatedAt
+
+const syncMessages: Partial<Record<SyncState, string>> = {
+  connecting: 'Workspace is reconnecting…',
+  reconnecting: 'Live updates are paused. Reconnecting…',
+  offline: 'Live updates are unavailable. Refresh before editing.',
+}
+
+// Two panes above 1024, one below. This is read in JavaScript rather than left
+// to CSS because the two layouts do not show the same thing: on a phone the
+// note replaces the list, on a laptop it sits beside it.
+function useTwoPane() {
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches)
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 1024px)')
+    const onChange = (event: MediaQueryListEvent) => setWide(event.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+  return wide
 }
 
 export default function App() {
-  const [active, setActive] = useState<'Home' | Section>('Home')
-  const { items, loading, error, liveSync, importedPacks, saveItem: persistItem, deleteItem: persistDelete, getAttachmentUrl, deleteAttachment, importReferencePack, importSupplierSamples, importLocationPlan, importLaunchChecklist } = useWorkspaceItems()
-  const [query, setQuery] = useState('')
-  const [globalQuery, setGlobalQuery] = useState('')
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const [editing, setEditing] = useState<WorkspaceItem | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [composerOpen, setComposerOpen] = useState(false)
+  const {
+    items, loading, error, syncState, cleanupWarning, dismissCleanupWarning,
+    saveItem: persistItem, deleteItem: persistDelete, getAttachmentUrl,
+  } = useWorkspaceItems()
 
-  const visibleItems = useMemo(() => {
-    const base = items.filter(item => item.section === active)
-    return matchItems(base, query)
-  }, [active, items, query])
-  // The header search reads "Search everything", so it has to look outside the
-  // section that happens to be open.
-  const globalResults = useMemo(() => globalQuery.trim() ? matchItems(items, globalQuery) : [], [items, globalQuery])
+  const twoPane = useTwoPane()
+  const [screen, setScreen] = useState<Screen>('inbox')
+  const [accountOpen, setAccountOpen] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [editing, setEditing] = useState<WorkspaceItem | null>(null)
+  const [editingIsNew, setEditingIsNew] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
   const selectedItem = selectedId ? items.find(item => item.id === selectedId) ?? null : null
 
-  function closeSearch() {
-    setSearchOpen(false)
-    setGlobalQuery('')
+  // Recent is what has moved, newest first — not everything that exists.
+  //
+  // Seeding the launch checklist and the reference pack writes eighty-odd rows
+  // at once, all stamped with the same timestamp, and they would take the whole
+  // of this list and bury the three things you actually wrote. They are not
+  // recent activity; they are structure that arrived, and they already have a
+  // pin of their own to live in. So a seeded record stays out of Recent until a
+  // person touches it — the moment you tick it, edit it or file it, its
+  // updatedAt moves and it turns up here as the activity it now is.
+  // A launch task belongs to the Launch Checklist and is worked on there. It
+  // does not also need to be activity in the Inbox: ticking six things off on a
+  // Saturday would push everything you actually wrote off the bottom of Recent.
+  const recent = useMemo(() => items
+    .filter(item => item.kind !== 'Checklist' && !isUntouchedImport(item))
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)), [items])
+
+  // Everything seeded and nothing worked on yet: the list is empty for a
+  // reason worth saying, rather than looking like a workspace that lost its
+  // contents.
+  const onlySeeded = items.length > 0 && recent.length === 0
+
+  // The one thing the pinned views cannot say on their own: what is sitting
+  // waiting on somebody else, and what you said you were doing a week ago and
+  // have not touched since. It appears only when there is something in it.
+  const needsYou = useMemo(() => {
+    const cutoff = Date.now() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000
+    return items.filter(item => itemNeedsYou(item, cutoff))
+  }, [items])
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      setAccountOpen(false)
+      setMoreOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  useEffect(() => {
+    if (!accountOpen) return
+    function onPointerDown(event: MouseEvent) {
+      if (!(event.target as HTMLElement | null)?.closest('.account')) setAccountOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [accountOpen])
+
+  // A file dropped anywhere on the page starts a note holding it. This is the
+  // one piece of the old capture bar worth keeping on a laptop.
+  useEffect(() => {
+    function onDragOver(event: DragEvent) {
+      if (event.dataTransfer?.types.includes('Files')) event.preventDefault()
+    }
+    function onDrop(event: DragEvent) {
+      const dropped = Array.from(event.dataTransfer?.files ?? [])
+      if (!dropped.length) return
+      event.preventDefault()
+      openNew('Notes', 'File', '', dropped)
+    }
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('drop', onDrop)
+    }
+  })
+
+  async function openAttachment(attachment: Pick<WorkspaceAttachment, 'storagePath'>) {
+    try {
+      window.open(await getAttachmentUrl(attachment.storagePath), '_blank', 'noopener,noreferrer')
+    } catch (reason) {
+      window.alert(reason instanceof Error ? reason.message : 'Could not open this file.')
+    }
   }
 
-  async function saveItem(item: WorkspaceItem, files?: File[]) {
-    await persistItem(item, files)
-    setComposerOpen(false)
+  async function signOut() {
+    setAccountOpen(false)
+    setSelectedId(null)
     setEditing(null)
-    // These files are uploaded now. Leaving them staged would re-upload the same
-    // file as a duplicate the next time any editor is opened and saved.
+    setPendingFiles([])
+    setScreen('inbox')
+    if (supabase) await supabase.auth.signOut()
+  }
+
+  async function saveItem(item: WorkspaceItem, files?: File[], removedAttachmentIds?: string[], links?: OutgoingLink[]) {
+    // A pasted link is a link, not a note that happens to contain one. This is
+    // the one thing Quick Add works out for you, because a URL on its own is
+    // never the thing you meant to write down.
+    const pasted = item.body.trim()
+    const record = editingIsNew && item.kind === 'Note' && /^https?:\/\/\S+$/i.test(pasted)
+      ? { ...item, kind: 'Link' as const, url: pasted, body: '', title: suggestTitleFromUrl(pasted) || item.title }
+      : item
+    await persistItem(record, files, removedAttachmentIds, links)
+    setEditing(null)
+    setPendingFiles([])
+    // Saving a brand-new record opens it beside the list, because the thing you
+    // just wrote is the thing you are most likely to want to look at. On a phone
+    // that would replace the list you saved it into, so there Save just finishes
+    // — and inside a view it would hide the view you were adding to, where the
+    // new task or expense has just appeared and is the thing worth seeing.
+    if (editingIsNew && twoPane && !onSavedView) setSelectedId(record.id)
+  }
+
+  function openNew(section: Section = 'Notes', kind?: ItemKind, body = '', files?: File[], area?: string) {
+    const startingKind = kind ?? sectionKinds[section][0]
+    const captured = body.trim()
+    const capturedUrl = startingKind === 'Link' ? captured : undefined
+    const suggested = capturedUrl ? suggestTitleFromUrl(capturedUrl)
+      : captured ? suggestTitle(captured, startingKind)
+        : files?.length ? suggestTitleFromFiles(files) : ''
+    setEditing({
+      id: createId(), title: suggested, body: capturedUrl ? '' : body, url: capturedUrl, kind: startingKind,
+      section, ...defaultsForKind(startingKind, area),
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    })
+    setEditingIsNew(true)
+    setPendingFiles(files ?? [])
+  }
+
+  // The floating + never asks what you are adding. Standing in a view it adds
+  // that view's thing; anywhere else it adds a plain note, and the note can be
+  // given a shape later from the chips on its own screen. Being made to
+  // classify a thought before it can be saved is the thing this app is not.
+  function startAdd() {
+    const view = savedViews.find(entry => entry.id === screen)
+    if (view) return openNew(view.section, view.addKind)
+    openNew('Notes')
+  }
+
+  function openEditor(item: WorkspaceItem) {
+    setMoreOpen(false)
+    setEditing(item)
+    setEditingIsNew(false)
     setPendingFiles([])
   }
 
-  function openNew(section?: Section, kind: ItemKind = 'Note', body = '', files?: File[]) {
-    const capturedUrl = kind === 'Link' ? body : undefined
-    setEditing({
-      id: createId(), title: '', body: capturedUrl ? '' : body, url: capturedUrl, kind,
-      section: section ?? 'Notes', area: kind === 'Product' ? 'Equipment' : kind === 'Location' ? 'Locations' : kind === 'Checklist' ? 'Launch Checklist' : kind === 'Quote' ? 'Quote' : kind === 'Expense' ? 'Expense' : undefined,
-      status: kind === 'Sample' ? 'Sample needed' : kind === 'Location' || kind === 'Checklist' || kind === 'Quote' ? 'Researching' : undefined,
-      details: kind === 'Checklist' ? { phase: 'Planning', completed: 'false' } : kind === 'Quote' ? { category: 'Equipment', date: new Date().toISOString().slice(0, 10), vendor: '' } : kind === 'Expense' ? { category: 'Equipment', date: new Date().toISOString().slice(0, 10), expenseType: 'Purchase', paymentStatus: 'Paid', vendor: '' } : undefined,
-      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    })
-    setPendingFiles(files ?? [])
-    setComposerOpen(true)
+  async function deleteSelected() {
+    if (!selectedItem) return
+    await persistDelete(selectedItem.id)
+    setConfirmDelete(false)
+    setMoreOpen(false)
+    setSelectedId(null)
   }
 
-  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  // Completion is `status`, and this is the only thing that writes it. The box
+  // in the Inbox, the box in the launch checklist and the Done chip in the
+  // editor are three ways of pressing the same switch — when they were three
+  // implementations they disagreed, and a task read as finished on one screen
+  // and unfinished on another.
+  async function toggleDone(item: WorkspaceItem, done: boolean) {
+    // Each kind has its own word for finished — 'Selected' on a property,
+    // 'Received' on a machine — and its own word for back on the pile.
+    await persistItem({
+      ...item,
+      status: done ? finishedStatus(item.kind) : initialStatus(item.kind),
+      updatedAt: new Date().toISOString(),
+    })
+  }
 
-  return (
-    <div className="app-shell">
+  // A record's own next steps. Saved the moment a box is ticked, so it travels
+  // the same realtime channel as every other edit.
+  async function saveTasks(item: WorkspaceItem, tasks: RecordTask[]) {
+    await persistItem({ ...item, details: writeTasks(item.details, tasks), updatedAt: new Date().toISOString() })
+  }
+
+  // A launch task written straight onto the checklist. It is a real record like
+  // any other — it opens, it carries next steps, it can be edited — but writing
+  // one costs a line of text rather than a trip through the editor.
+  async function addLaunchTask(title: string) {
+    const now = new Date().toISOString()
+    await persistItem({
+      id: createId(), title, body: '', kind: 'Checklist', section: 'Store Setup',
+      ...defaultsForKind('Checklist'),
+      createdAt: now, updatedAt: now,
+    })
+  }
+
+  // Renaming a task on the list. Emptying it deletes it, which is how you undo
+  // one you did not mean to write without hunting for a delete.
+  async function renameLaunchTask(task: WorkspaceItem, title: string) {
+    if (!title) { await persistDelete(task.id); return }
+    await persistItem({ ...task, title, updatedAt: new Date().toISOString() })
+  }
+
+  // Ticking a box that was written inside a note. The writing is the record, so
+  // this is an ordinary save of the writing — no separate list to keep in step.
+  async function saveBody(item: WorkspaceItem, body: string) {
+    await persistItem({ ...item, body, updatedAt: new Date().toISOString() })
+  }
+
+  function outgoingOf(item: WorkspaceItem): OutgoingLink[] {
+    return (item.links ?? []).filter(link => link.direction === 'from')
+      .map(link => ({ itemId: link.itemId, relationship: link.relationship }))
+  }
+
+  async function connect(item: WorkspaceItem, link: OutgoingLink) {
+    await persistItem(item, undefined, undefined, [...outgoingOf(item), link])
+  }
+
+  async function disconnect(item: WorkspaceItem, linkId: string) {
+    const dropped = (item.links ?? []).find(link => link.id === linkId)
+    if (!dropped || dropped.direction !== 'from') return
+    await persistItem(item, undefined, undefined,
+      outgoingOf(item).filter(link => !(link.itemId === dropped.itemId && link.relationship === dropped.relationship)))
+  }
+
+  // One click means one thing: click Suppliers, and the workspace shows
+  // Suppliers. Leaving the open record in place meant the pin lit up, the back
+  // button relabelled, and the pane you were looking at did not move.
+  function openView(view: SavedViewId) {
+    setSelectedId(null)
+    setScreen(view)
+  }
+
+  function goHome() {
+    setScreen('inbox')
+    setSelectedId(null)
+  }
+
+  const syncMessage = loading ? '' : syncMessages[syncState] ?? ''
+  // "Needs you" is a view without a pin of its own in the list, so looking it
+  // up in savedViews alone left it rendering the Inbox instead of itself.
+  const onSavedView = screen !== 'inbox'
+  const savedView = savedViews.find(entry => entry.id === screen) ?? null
+  // Standing in Locations the + adds a location, so that is what it is called.
+  const addLabel = savedView ? savedView.addAction : 'Add note'
+  // On a phone one region holds whatever is open, so it is named for what it is
+  // currently showing. Announcing a view of the suppliers as "Inbox" tells a
+  // screen reader the opposite of what everyone else can see.
+  const paneLabel = onSavedView ? savedView?.label ?? 'Needs you' : 'Inbox'
+
+  const savedViewScreen = onSavedView ? (
+    <SavedViewScreen viewId={screen as SavedViewId} items={items} onBack={goHome} selectedId={selectedId}
+      onOpen={item => setSelectedId(item.id)}
+      onOpenAttachment={openAttachment} resolveUrl={getAttachmentUrl}
+      onToggleDone={toggleDone} onAddTask={addLaunchTask} onRenameTask={renameLaunchTask}
+      // The Launch Checklist writes its own tasks, on the list, in the row at
+      // the foot of it. A + on the heading beside that would be two plus signs
+      // on one screen doing the same job — and the one that opened a whole
+      // editor to type a single line is the ceremony that row exists to remove.
+      onAdd={!loading && !editing && screen !== 'checklist' ? startAdd : undefined} addLabel={addLabel} />
+  ) : null
+
+  const workspaceHeader = (
       <header className="topbar">
-        <button className="mobile-menu" aria-label="Open navigation" onClick={() => setMobileOpen(v => !v)}><MenuIcon size={21} /></button>
-        <button className="brand" onClick={() => { setActive('Home'); setSelectedId(null); closeSearch() }}>Boba Bear HQ</button>
-        <nav className={mobileOpen ? 'nav nav-open' : 'nav'} aria-label="Main navigation">
-          {sections.map(section => (
-            <button key={section} className={active === section ? 'nav-item active' : 'nav-item'} onClick={() => { setActive(section); setSelectedId(null); setMobileOpen(false); setQuery(''); closeSearch() }}>{section}</button>
-          ))}
-        </nav>
+        <button className="brand" onClick={goHome}>
+          <img className="brand-mark" src="/logo-mark.png" alt="" width={32} height={32} />
+          <span>Boba Bear</span>
+        </button>
         <div className="top-actions">
-          <button className="icon-button" aria-label="Search" onClick={() => setSearchOpen(v => !v)}><Search size={25} strokeWidth={1.7} /></button>
-          <button className="avatar" aria-label="Sign out of the shared account" title="Sign out"
-            onClick={async () => { if (supabase && window.confirm('Sign out of Boba Bear HQ?')) await supabase.auth.signOut() }}>B</button>
+          <div className="account">
+            <button className="avatar" aria-label="Account" aria-haspopup="menu" aria-expanded={accountOpen} onClick={() => setAccountOpen(value => !value)}>B</button>
+            {accountOpen && (
+              <div className="account-menu" role="menu">
+                <p className="account-email">{workspaceEmail}</p>
+                <p className="account-note">Shared Boba Bear workspace</p>
+                <button role="menuitem" className="account-signout" onClick={signOut}>Sign out</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+  )
+
+  const listPane = (
+    <>
+      <header className="topbar">
+        <button className="brand" onClick={goHome}>
+          <img className="brand-mark" src="/logo-mark.png" alt="" width={32} height={32} />
+          <span>Boba Bear</span>
+        </button>
+        <div className="top-actions">
+          <div className="account">
+            <button className="avatar" aria-label="Account" aria-haspopup="menu" aria-expanded={accountOpen} onClick={() => setAccountOpen(value => !value)}>B</button>
+            {accountOpen && (
+              <div className="account-menu" role="menu">
+                <p className="account-email">{workspaceEmail}</p>
+                <p className="account-note">Shared Boba Bear workspace</p>
+                <button role="menuitem" className="account-signout" onClick={signOut}>Sign out</button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
-      {searchOpen && (
-        <div className="global-search">
-          <Search size={18} />
-          <input autoFocus value={globalQuery} onChange={e => setGlobalQuery(e.target.value)} placeholder="Search everything…" />
-          <button aria-label="Close search" onClick={closeSearch}><X size={18} /></button>
-        </div>
-      )}
-
-      <main>
+      <div className="pane-body">
         {error && <div className="workspace-error" role="alert">{error}</div>}
-        {!loading && !liveSync && <div className="workspace-offline" role="status">Live updates are not connected. Refresh before editing so you do not overwrite the other session.</div>}
-        {loading && <div className="workspace-loading">Opening your workspace…</div>}
-        {!loading && (globalQuery.trim() ? <GlobalResults query={globalQuery} results={globalResults}
-          onOpen={item => { setSelectedId(item.id); setActive(item.section); closeSearch() }} onClear={closeSearch} />
-          : selectedItem ? <ItemDetail item={selectedItem} onBack={() => setSelectedId(null)}
-          onEdit={() => { setEditing(selectedItem); setComposerOpen(true) }}
-          onOpenAttachment={async path => { window.open(await getAttachmentUrl(path), '_blank', 'noopener,noreferrer') }} />
-          : active === 'Home' ? <Home onCreate={openNew} /> : (
-            <SectionPage section={active} items={visibleItems} allItems={items.filter(item => item.section === active)} query={query} setQuery={setQuery}
-              onNew={() => openNew(active)} onNewProduct={() => openNew('Store Setup', 'Product')}
-              onNewSample={() => openNew('Suppliers', 'Sample')}
-              onNewLocation={() => openNew('Store Setup', 'Location')}
-              onNewChecklist={() => openNew('Store Setup', 'Checklist')}
-              onNewQuote={() => openNew('Money', 'Quote')}
-              onNewExpense={() => openNew('Money', 'Expense')}
-              onOpen={item => setSelectedId(item.id)} onImport={importReferencePack}
-              onImportSamples={importSupplierSamples}
-              onImportLocations={importLocationPlan}
-              onImportChecklist={importLaunchChecklist}
-              onToggleChecklist={async (item, completed) => persistItem({ ...item, details: { ...item.details, completed: String(completed) }, updatedAt: new Date().toISOString() })}
-              hasReferencePack={importedPacks.reference} />
-          ))}
-      </main>
+        {cleanupWarning && <div className="workspace-warning" role="status">{cleanupWarning}<button aria-label="Dismiss file cleanup warning" onClick={dismissCleanupWarning}><X size={15} /></button></div>}
+        {syncMessage && <div className="workspace-offline" role="status">{syncMessage}</div>}
+        {loading
+          ? <div className="workspace-loading">Opening your workspace…</div>
+          // Results are a list of records with three lines each, and this rail
+          // is 348px wide. They belong in the workspace, the way an open view
+          // does — the rail keeps the field you are typing into and the pins.
+          // On a laptop a view is content, not navigation, so it opens in the
+          // wide pane and this side stays the Inbox with its pin marked. On a
+          // phone there is one pane, so the view takes it.
+          : onSavedView && !twoPane
+              ? savedViewScreen
+              : <InboxScreen items={items} recent={recent} needsYou={needsYou}
+                activeView={onSavedView ? screen as SavedViewId : null}
+                onOpenView={openView} onlySeeded={onlySeeded}
+                onOpen={item => setSelectedId(item.id)} onToggleDone={toggleDone} selectedId={selectedId}
+                // On a laptop the rail and an open view are both on screen, and
+                // the + belongs to whichever one you are working in — otherwise
+                // there are two of them, and the rail's is labelled for a view
+                // it is not showing. The open view wins.
+                onAdd={!loading && !editing && !onSavedView ? startAdd : undefined} addLabel={addLabel} />}
+      </div>
+    </>
+  )
 
-      {composerOpen && editing && <Editor item={editing} pendingFiles={pendingFiles} onFilesChange={setPendingFiles}
-        onOpenAttachment={async path => { window.open(await getAttachmentUrl(path), '_blank', 'noopener,noreferrer') }}
-        onDeleteAttachment={attachment => deleteAttachment(editing.id, attachment)}
-        onClose={() => { setComposerOpen(false); setEditing(null); setPendingFiles([]) }} onSave={saveItem}
-        onDelete={async () => { await persistDelete(editing.id); setSelectedId(null); setComposerOpen(false); setEditing(null); setPendingFiles([]) }} />}
+  const notePane = editing
+    ? <Editor item={editing} isNew={editingIsNew} workspaceItems={items} pendingFiles={pendingFiles} onFilesChange={setPendingFiles}
+      header={twoPane ? null : workspaceHeader}
+      backLabel={savedView ? savedView.label : 'Inbox'}
+      onOpenAttachment={openAttachment} resolveUrl={getAttachmentUrl}
+      onClose={() => { setEditing(null); setPendingFiles([]) }} onSave={saveItem}
+      onDelete={async () => { await persistDelete(editing.id); setSelectedId(null); setEditing(null); setPendingFiles([]) }} />
+    : selectedItem
+      ? <ItemDetail item={selectedItem} items={items} onBack={() => setSelectedId(null)}
+        showBack={!twoPane || onSavedView} backLabel={savedView ? savedView.label : onSavedView ? 'Needs you' : ''}
+        onMore={() => setMoreOpen(true)}
+        header={twoPane ? null : workspaceHeader}
+        onLink={link => connect(selectedItem, link)}
+        onUnlink={linkId => disconnect(selectedItem, linkId)}
+        onEdit={() => openEditor(selectedItem)}
+        onOpenRelated={id => setSelectedId(id)}
+        onOpenAttachment={openAttachment}
+        resolveUrl={getAttachmentUrl}
+        onTasksChange={tasks => saveTasks(selectedItem, tasks)}
+        onBodyChange={body => saveBody(selectedItem, body)} />
+      : twoPane ? savedViewScreen : null
+
+  // A phone shows one thing at a time: the note if there is one, otherwise the
+  // list. A laptop shows the Inbox beside whatever is open.
+  const showingNote = Boolean(notePane || (!twoPane && onSavedView))
+
+  // The window has two regions and they mean different things: the Inbox, which
+  // is always there and is how you get anywhere, and the pane holding whatever
+  // is currently open. On a phone only one of them is on screen at a time, and
+  // that one is the main region. Naming them is what lets a screen reader — and
+  // a test — tell navigation apart from the thing being worked on.
+  return (
+    <div className={twoPane ? 'app-shell two-pane' : 'app-shell'}>
+      {twoPane
+        ? <>
+          <aside className="list-pane" data-pane="inbox" aria-label="Inbox">{listPane}</aside>
+          <main className="note-pane" data-pane="content" aria-label="Workspace">{notePane ?? <EmptyNotePane onAdd={startAdd} />}</main>
+        </>
+        : showingNote && notePane
+          ? <main className="note-pane" data-pane="content" aria-label="Workspace">{notePane}</main>
+          : <main data-pane="inbox" aria-label={paneLabel}>{listPane}</main>}
+
+
+      {moreOpen && selectedItem && (
+        <BottomSheet title={selectedItem.title} onClose={() => { setMoreOpen(false); setConfirmDelete(false) }}>
+          <SheetOption onClick={() => openEditor(selectedItem)}>Edit</SheetOption>
+          {confirmDelete
+            ? <>
+              <p className="sheet-warning">This cannot be undone.</p>
+              <SheetOption danger onClick={deleteSelected}>Delete permanently</SheetOption>
+              <SheetOption onClick={() => setConfirmDelete(false)}>Keep it</SheetOption>
+            </>
+            : <SheetOption danger onClick={() => setConfirmDelete(true)}>Delete</SheetOption>}
+        </BottomSheet>
+      )}
     </div>
   )
 }
 
-function Home({ onCreate }: { onCreate: (section?: Section, kind?: ItemKind, body?: string, files?: File[]) => void }) {
-  const [text, setText] = useState('')
-  const [kind, setKind] = useState<ItemKind>('Note')
-  const [dragging, setDragging] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  // The placeholder has always invited a drop, so honour it. Dropped files keep
-  // whatever has been typed so far as the body of the same record.
-  function acceptFiles(files: File[]) {
-    if (!files.length) return
-    const typed = text.trim()
-    onCreate('Library', 'File', typed, files)
-    setText('')
-  }
-
-  function save() {
-    if (!text.trim()) return
-    const value = text.trim()
-    const detectedKind = /^https?:\/\//i.test(value) ? 'Link' : kind
-    onCreate(undefined, detectedKind, value)
-    setText('')
-  }
-
+// The home screen: what is pinned, then what has moved recently. No cards, no
+// tiles, no charts — the writing is the interface.
+function InboxScreen({ items, recent, needsYou, activeView, onlySeeded, onOpenView, onOpen, onToggleDone, selectedId, onAdd, addLabel }: {
+  items: WorkspaceItem[]
+  recent: WorkspaceItem[]
+  needsYou: WorkspaceItem[]
+  activeView: SavedViewId | null
+  onlySeeded: boolean
+  onOpenView: (id: SavedViewId) => void
+  onOpen: (item: WorkspaceItem) => void
+  onToggleDone: (item: WorkspaceItem, done: boolean) => Promise<void>
+  selectedId: string | null
+  // The one way to add, on the line that names the screen — the slot the
+  // `Everything ▾` filter used to sit in. Absent while you are writing.
+  onAdd?: () => void
+  addLabel: string
+}) {
+  // The `Everything ▾` menu listed Notes, Tasks, Money, Locations, Suppliers,
+  // Menu, Equipment, Marketing, Documents — which is the list of Views, printed
+  // a second time three inches below itself. Two navigations for one set of
+  // things is how a small app starts feeling like a large one.
   return (
-    <section className={dragging ? 'home home-dragging' : 'home'}
-      onDragOver={e => { e.preventDefault(); setDragging(true) }}
-      onDragLeave={e => { if (e.currentTarget === e.target) setDragging(false) }}
-      onDrop={e => { e.preventDefault(); setDragging(false); acceptFiles(Array.from(e.dataTransfer.files)) }}>
-      <h1>Home</h1>
-      <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Start writing, paste a product link, or drop a file here…" aria-label="Quick capture" />
-      <div className="capture-actions">
-        <button className={kind === 'File' ? 'capture-tool selected' : 'capture-tool'} onClick={() => fileRef.current?.click()} aria-label="Attach file"><Paperclip /></button>
-        <button className={kind === 'Link' ? 'capture-tool selected' : 'capture-tool'} onClick={() => setKind('Link')} aria-label="Save link"><Link2 /></button>
-        <button className="capture-tool" onClick={() => setKind('File')} aria-label="Add image"><Image /></button>
-        <button className="save-button" disabled={!text.trim()} onClick={save}>Save</button>
-        <input ref={fileRef} type="file" hidden multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.html"
-          onChange={e => { acceptFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
+    <section className="screen inbox">
+      <div className="screen-heading">
+        <h1>Inbox</h1>
+        {onAdd && <button className="add-button" aria-label={addLabel} onClick={onAdd}><Plus size={20} strokeWidth={2} /></button>}
       </div>
-      <p>Choose where it belongs after saving.</p>
-    </section>
-  )
-}
 
-function iconForKind(kind: ItemKind) {
-  if (kind === 'Link') return <Link2 size={18} />
-  if (kind === 'File') return <FileIcon size={18} />
-  if (kind === 'Expense' || kind === 'Quote') return <DollarSign size={18} />
-  if (kind === 'Product') return <Package size={18} />
-  if (kind === 'Sample') return <FlaskConical size={18} />
-  if (kind === 'Location') return <MapPin size={18} />
-  if (kind === 'Checklist') return <ListChecks size={18} />
-  return <FileText size={18} />
-}
+      {/* On a workspace with nothing in it, this is the first thing to read.
+          Below the pins it was clipped by the fold with the + painted over it. */}
+      {items.length === 0 && <div className="empty-state welcome">
+        <img src="/logo-mark.png" alt="" width={44} height={44} />
+        <p>Your Boba Bear notebook is ready.</p>
+        <small>Add a supplier, property, receipt, document, task, or anything you want to remember — or open a view below and start from a ready-made list.</small>
+      </div>}
 
-function GlobalResults({ query, results, onOpen, onClear }: { query: string; results: WorkspaceItem[]; onOpen: (item: WorkspaceItem) => void; onClear: () => void }) {
-  return (
-    <section className="section-page">
-      <div className="section-heading">
-        <div><p className="eyebrow">Search</p><h1>{results.length} {results.length === 1 ? 'result' : 'results'}</h1></div>
-        <div className="section-actions"><button className="minimal-add" onClick={onClear}><X size={16} /> Clear search</button></div>
-      </div>
-      {results.length === 0
-        ? <div className="empty-state"><p>Nothing matches “{query.trim()}”.</p><button onClick={onClear}>Clear search</button></div>
-        : <div className="item-list">
-          {results.map(item => (
-            <button className="item-row" key={item.id} onClick={() => onOpen(item)}>
-              <span className="item-icon">{iconForKind(item.kind)}</span>
-              <span className="item-copy"><strong>{item.title}</strong><small>{item.body}</small></span>
-              <span className="item-meta">{item.status && <em>{item.status}</em>}{item.section}</span>
+      {/* These are the whole navigation system, so they are here before there
+          is anything to navigate to. Hiding them until the first record existed
+          took the Launch Checklist and the Library off the screen — and with
+          them the two buttons that seed a brand-new workspace, which is exactly
+          when somebody needs them.
+          "Pinned" was left over from an earlier concept and was a lie three
+          times over: nobody pinned these, they cannot be unpinned, and they are
+          not a chosen subset of anything. They are the eight areas the business
+          has. Unpinning Money would only raise the question of where Money went. */}
+      <>
+        <p className="eyebrow">Views</p>
+        <div className="pin-list">
+          {needsYou.length > 0 && (
+            <button className={activeView === 'needs-you' ? 'pin-row active' : 'pin-row'} onClick={() => onOpenView('needs-you')}>
+              <strong>Needs you</strong>
+              <small>{needsYou.length} waiting or untouched</small>
+            </button>
+          )}
+          {savedViews.map(view => (
+            <button className={activeView === view.id ? 'pin-row active' : 'pin-row'} key={view.id} onClick={() => onOpenView(view.id)}>
+              <strong>{view.label}</strong>
+              <small>{savedViewSummary(view.id, items)}</small>
             </button>
           ))}
+        </div>
+      </>
+
+      {items.length > 0 && <p className="eyebrow">Recent</p>}
+      {recent.length === 0
+        ? items.length === 0 ? null : <div className="empty-state">
+          <p>{onlySeeded ? 'Nothing worked on yet.' : 'Nothing here yet.'}</p>
+          {onlySeeded && <small>What you have imported is waiting in the views above. Anything you touch shows up here.</small>}
+        </div>
+        : <div className="item-list">
+          {recent.map(item => (
+            <ItemRow key={item.id} item={item} onOpen={onOpen}
+              onToggleDone={completable(item) ? onToggleDone : undefined}
+              showStatus={statusIsTelling(recent)} selected={item.id === selectedId} />
+          ))}
         </div>}
     </section>
   )
 }
 
-function SectionPage({ section, items, allItems, query, setQuery, onNew, onNewProduct, onNewSample, onNewLocation, onNewChecklist, onNewQuote, onNewExpense, onOpen, onImport, onImportSamples, onImportLocations, onImportChecklist, onToggleChecklist, hasReferencePack }: { section: Section; items: WorkspaceItem[]; allItems: WorkspaceItem[]; query: string; setQuery: (value: string) => void; onNew: () => void; onNewProduct: () => void; onNewSample: () => void; onNewLocation: () => void; onNewChecklist: () => void; onNewQuote: () => void; onNewExpense: () => void; onOpen: (item: WorkspaceItem) => void; onImport: () => Promise<void>; onImportSamples: () => Promise<void>; onImportLocations: () => Promise<void>; onImportChecklist: () => Promise<void>; onToggleChecklist: (item: WorkspaceItem, completed: boolean) => Promise<void>; hasReferencePack: boolean }) {
-  const [importing, setImporting] = useState(false)
-  const [importMessage, setImportMessage] = useState('')
-  // The checklist widget only exists on Store Setup. A checklist task moved to
-  // any other section has to appear in that section's normal list or it becomes
-  // unreachable.
-  const showsChecklistSeparately = section === 'Store Setup'
-  return (
-    <section className="section-page">
-      <div className="section-heading">
-        <div><p className="eyebrow">Workspace</p><h1>{section}</h1></div>
-        <div className="section-actions">{section === 'Store Setup' && <><button className="minimal-add" onClick={onNewLocation}><MapPin size={16} /> Add location</button><button className="minimal-add" onClick={onNewProduct}><Package size={16} /> Add equipment</button></>}{section === 'Suppliers' && <button className="minimal-add" onClick={onNewSample}><FlaskConical size={16} /> Add sample</button>}<button className="minimal-add" onClick={onNew}><Plus size={17} /> Add</button></div>
-      </div>
-      <div className="section-search"><Search size={18} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Search ${section.toLowerCase()}…`} /></div>
-      {section === 'Library' && !hasReferencePack && <div className="reference-import">
-        <div><strong>Bring in the Boba Bear reference pack</strong><p>Add the useful parts of your existing documents across every tab. Nothing will be marked as final.</p></div>
-        <button disabled={importing} onClick={async () => { setImporting(true); setImportMessage(''); try { await onImport(); setImportMessage('Reference pack added.') } catch (reason) { setImportMessage(reason instanceof Error ? reason.message : 'Could not import the reference pack.') } finally { setImporting(false) } }}>{importing ? 'Adding…' : 'Add references'}</button>
-      </div>}
-      {importMessage && <p className="import-message">{importMessage}</p>}
-      {section === 'Suppliers' && <SupplierSampleOverview samples={allItems.filter(item => item.kind === 'Sample')} onAdd={onNewSample} onAddStarterPlan={onImportSamples} />}
-      {section === 'Store Setup' && <LocationScoutingOverview locations={allItems.filter(item => item.kind === 'Location')} onAdd={onNewLocation} onAddStarterPlan={onImportLocations} />}
-      {section === 'Store Setup' && <EquipmentComparison products={allItems.filter(item => item.kind === 'Product')} onAdd={onNewProduct} onOpen={onOpen} />}
-      {section === 'Store Setup' && <LaunchChecklist tasks={items.filter(item => item.kind === 'Checklist')} onAdd={onNewChecklist} onAddStarterPlan={onImportChecklist} onOpen={onOpen} onToggle={onToggleChecklist} />}
-      {section === 'Money' && <MoneyOverview records={allItems.filter(item => item.kind === 'Quote' || item.kind === 'Expense')} onAddQuote={onNewQuote} onAddExpense={onNewExpense} />}
-      <div className="item-list">
-        {items.filter(item => showsChecklistSeparately ? item.kind !== 'Checklist' : true).length === 0
-          ? (query.trim()
-            // A section full of records that simply do not match should not claim to be empty.
-            ? <div className="empty-state"><p>Nothing in {section} matches “{query.trim()}”.</p><button onClick={() => setQuery('')}>Clear search</button></div>
-            : section === 'Store Setup' ? null : <div className="empty-state"><p>Nothing here yet.</p><button onClick={onNew}>Add the first item</button></div>)
-          : items.filter(item => showsChecklistSeparately ? item.kind !== 'Checklist' : true).map(item => (
-          <button className="item-row" key={item.id} onClick={() => onOpen(item)}>
-            <span className="item-icon">{iconForKind(item.kind)}</span>
-            <span className="item-copy"><strong>{item.title}</strong><small>{item.body}</small></span>
-            <span className="item-meta">{item.status && <em>{item.status}</em>}{['Product', 'Sample', 'Expense', 'Quote'].includes(item.kind) && formatRupees(item.amount) ? `${formatRupees(item.amount)} · ` : ''}{item.area ?? item.section}</span>
-          </button>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function Editor({ item, pendingFiles, onFilesChange, onOpenAttachment, onDeleteAttachment, onClose, onSave, onDelete }: {
-  item: WorkspaceItem; pendingFiles: File[]; onFilesChange: (files: File[]) => void;
-  onOpenAttachment: (path: string) => Promise<void>; onDeleteAttachment: (attachment: NonNullable<WorkspaceItem['attachments']>[number]) => Promise<void>; onClose: () => void;
-  onSave: (item: WorkspaceItem, files?: File[]) => Promise<void>; onDelete: () => Promise<void>
+function SavedViewScreen(props: Parameters<typeof SavedViewBody>[0] & {
+  onBack: () => void
+  onAdd?: () => void
+  addLabel: string
 }) {
-  const [draft, setDraft] = useState(item)
-  const [saving, setSaving] = useState(false)
-  // A stray click on the backdrop used to discard everything typed so far.
-  const isDirty = JSON.stringify(draft) !== JSON.stringify(item) || pendingFiles.length > 0
-  function closeWithGuard() {
-    if (isDirty && !window.confirm('Discard your unsaved changes to this record?')) return
-    onClose()
-  }
-  const [saveError, setSaveError] = useState('')
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const [attachmentError, setAttachmentError] = useState('')
-  const isExisting = starterItems.some(x => x.id === item.id) || Boolean(item.title)
+  const view = savedViews.find(entry => entry.id === props.viewId)
+  const label = view?.label ?? 'Needs you'
+  const count = savedViewCount(props.viewId, props.items)
   return (
-    <div className="modal-backdrop" onMouseDown={closeWithGuard}>
-      <form className="editor" onMouseDown={e => e.stopPropagation()} onSubmit={async e => { e.preventDefault(); if (!draft.title.trim()) return; setSaving(true); setSaveError(''); try { await onSave({ ...draft, updatedAt: new Date().toISOString() }, pendingFiles) } catch (reason) { setSaveError(reason instanceof Error ? reason.message : 'Could not save this item.'); setSaving(false) } }}>
-        <div className="editor-top"><span>{isExisting ? 'Edit item' : 'Add to workspace'}</span><button type="button" aria-label="Close editor" onClick={closeWithGuard}><X size={20} /></button></div>
-        <input className="title-input" autoFocus value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} placeholder="Title" />
-        <textarea className="body-input" value={draft.body} onChange={e => setDraft({ ...draft, body: e.target.value })} placeholder="Write anything…" />
-        <div className="editor-fields">
-          <label>Type<select value={draft.kind} onChange={e => setDraft({ ...draft, kind: e.target.value as ItemKind })}><option>Note</option><option>Link</option><option>File</option><option>Expense</option><option>Quote</option><option>Product</option><option>Sample</option><option>Location</option><option>Checklist</option></select></label>
-          <label>Belongs to<select value={draft.section} onChange={e => setDraft({ ...draft, section: e.target.value as Section, area: '' })}>{sections.filter(s => s !== 'Home').map(s => <option key={s}>{s}</option>)}</select></label>
-          <label>Area<select value={draft.area ?? ''} onChange={e => setDraft({ ...draft, area: e.target.value })}><option value="">Choose later</option>{sectionAreas[draft.section]?.map(area => <option key={area}>{area}</option>)}</select></label>
-          <label>Status<select value={draft.status ?? ''} onChange={e => setDraft({ ...draft, status: (e.target.value || undefined) as ItemStatus | undefined })}><option value="">Not set</option><option>Reference</option><option>Researching</option><option>Sample needed</option><option>Requested</option><option>Ordered</option><option>Received</option><option>Testing</option><option>Visited</option><option>Shortlisted</option><option>Selected</option><option>Not selected</option></select></label>
-        </div>
-        {(draft.kind === 'Link' || draft.kind === 'File' || draft.kind === 'Product' || draft.kind === 'Sample' || draft.kind === 'Location' || draft.kind === 'Quote' || draft.kind === 'Expense') && <input className="url-input" value={draft.url ?? ''} onChange={e => setDraft({ ...draft, url: e.target.value })} placeholder={draft.kind === 'Location' ? 'Google Maps or listing link' : draft.kind === 'Quote' || draft.kind === 'Expense' ? 'Optional product, invoice, or payment link' : draft.kind === 'Product' || draft.kind === 'Sample' ? 'Product page link' : 'Paste link or file reference'} />}
-        {(draft.kind === 'Expense' || draft.kind === 'Quote' || draft.kind === 'Product' || draft.kind === 'Sample') && <label className="amount-field">{draft.kind === 'Product' ? 'Price / quote (₹)' : draft.kind === 'Sample' ? 'Sample + delivery cost (₹)' : draft.kind === 'Quote' ? 'Quoted amount (₹)' : 'Expense amount (₹)'}<input type="number" min="0" step="0.01" value={draft.amount ?? ''} onChange={e => setDraft({ ...draft, amount: e.target.value })} placeholder="0.00" /></label>}
-        {draft.kind === 'Product' && <div className="product-fields">
-          <label>Category<input value={draft.details?.category ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, category: e.target.value } })} placeholder="Cup sealer, blender…" /></label>
-          <label>Supplier<input value={draft.details?.supplier ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, supplier: e.target.value } })} placeholder="Supplier name" /></label>
-          <label>Model / size<input value={draft.details?.model ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, model: e.target.value } })} placeholder="Model or capacity" /></label>
-          <label>MOQ<input value={draft.details?.moq ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, moq: e.target.value } })} placeholder="Minimum order" /></label>
-          <label>Lead time<input value={draft.details?.leadTime ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, leadTime: e.target.value } })} placeholder="Delivery estimate" /></label>
-          <label>Warranty / service<input value={draft.details?.warranty ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, warranty: e.target.value } })} placeholder="Local service details" /></label>
-        </div>}
-        {draft.kind === 'Sample' && <div className="product-fields">
-          <label>Supplier<input value={draft.details?.supplier ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, supplier: e.target.value } })} placeholder="Tea Planet, QQS…" /></label>
-          <label>Product / category<input value={draft.details?.category ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, category: e.target.value } })} placeholder="Flavor, powder, jelly…" /></label>
-          <label>Requested date<input type="date" value={draft.details?.requestedDate ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, requestedDate: e.target.value } })} /></label>
-          <label>Received date<input type="date" value={draft.details?.receivedDate ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, receivedDate: e.target.value } })} /></label>
-          <label>MOQ<input value={draft.details?.moq ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, moq: e.target.value } })} placeholder="Minimum order" /></label>
-          <label>Lead time<input value={draft.details?.leadTime ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, leadTime: e.target.value } })} placeholder="Delivery time" /></label>
-          <label>Label / FSSAI check<select value={draft.details?.labelCheck ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, labelCheck: e.target.value } })}><option value="">Not checked</option><option>Looks complete</option><option>Needs clarification</option><option>Not acceptable</option><option>Not applicable</option></select></label>
-          <label>Taste score<input type="number" min="1" max="10" value={draft.details?.tasteScore ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, tasteScore: e.target.value } })} placeholder="1–10" /></label>
-        </div>}
-        {draft.kind === 'Location' && <div className="product-fields">
-          <label>Search area<input value={draft.details?.searchArea ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, searchArea: e.target.value } })} placeholder="Kaviraj Nagar…" /></label>
-          <label>Property / address<input value={draft.details?.address ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, address: e.target.value } })} placeholder="Address or landmark" /></label>
-          <label>Contact name<input value={draft.details?.contactName ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, contactName: e.target.value } })} placeholder="Owner or broker" /></label>
-          <label>Phone<input value={draft.details?.phone ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, phone: e.target.value } })} placeholder="Contact number" /></label>
-          <label>Monthly rent (₹)<input type="number" min="0" value={draft.details?.monthlyRent ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, monthlyRent: e.target.value } })} placeholder="Current quote" /></label>
-          <label>Deposit (₹)<input type="number" min="0" value={draft.details?.deposit ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, deposit: e.target.value } })} placeholder="Current quote" /></label>
-          <label>Size (sq ft)<input value={draft.details?.sizeSqFt ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, sizeSqFt: e.target.value } })} placeholder="Approximate size" /></label>
-          <label>Frontage<input value={draft.details?.frontage ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, frontage: e.target.value } })} placeholder="Width / visibility" /></label>
-          <label>Visit date<input type="date" value={draft.details?.visitDate ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, visitDate: e.target.value } })} /></label>
-          <label>Student footfall<input value={draft.details?.footfall ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, footfall: e.target.value } })} placeholder="Low, medium, high + notes" /></label>
-          <label>Parking / access<input value={draft.details?.parking ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, parking: e.target.value } })} placeholder="Two-wheelers, road access…" /></label>
-          <label>Water / power / drainage<input value={draft.details?.utilities ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, utilities: e.target.value } })} placeholder="What is available?" /></label>
-          <label>Delivery pickup access<input value={draft.details?.deliveryAccess ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, deliveryAccess: e.target.value } })} placeholder="Easy, difficult, unknown…" /></label>
-          <label>Pros<input value={draft.details?.pros ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, pros: e.target.value } })} placeholder="What looks good" /></label>
-          <label>Concerns<input value={draft.details?.concerns ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, concerns: e.target.value } })} placeholder="Risks or questions" /></label>
-        </div>}
-        {draft.kind === 'Checklist' && <div className="product-fields">
-          <label>Phase<select value={draft.details?.phase ?? 'Planning'} onChange={e => setDraft({ ...draft, details: { ...draft.details, phase: e.target.value } })}><option>Planning</option><option>Location &amp; legal</option><option>Suppliers &amp; menu testing</option><option>Equipment &amp; store setup</option><option>People &amp; operations</option><option>Prelaunch &amp; opening</option></select></label>
-          <label className="completed-field"><input type="checkbox" checked={draft.details?.completed === 'true'} onChange={e => setDraft({ ...draft, details: { ...draft.details, completed: String(e.target.checked) } })} /> Completed</label>
-        </div>}
-        {(draft.kind === 'Quote' || draft.kind === 'Expense') && <div className="product-fields">
-          <label>Category<select value={draft.details?.category ?? 'Equipment'} onChange={e => setDraft({ ...draft, details: { ...draft.details, category: e.target.value } })}><option>Equipment</option><option>Ingredients</option><option>Packaging</option><option>Location</option><option>Marketing</option><option>Legal</option><option>Utilities</option><option>Other</option></select></label>
-          <label>Vendor / paid to<input value={draft.details?.vendor ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, vendor: e.target.value } })} placeholder="Supplier, shop, person…" /></label>
-          <label>Date<input type="date" value={draft.details?.date ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, date: e.target.value } })} /></label>
-          {draft.kind === 'Quote' ? <>
-            <label>Valid until<input type="date" value={draft.details?.validUntil ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, validUntil: e.target.value } })} /></label>
-            <label>Tax / delivery<input value={draft.details?.taxDelivery ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, taxDelivery: e.target.value } })} placeholder="Included, extra, unknown…" /></label>
-          </> : <>
-            <label>Record type<select value={draft.details?.expenseType ?? 'Purchase'} onChange={e => setDraft({ ...draft, details: { ...draft.details, expenseType: e.target.value } })}><option>Purchase</option><option>Expense</option></select></label>
-            <label>Payment status<select value={draft.details?.paymentStatus ?? 'Paid'} onChange={e => setDraft({ ...draft, details: { ...draft.details, paymentStatus: e.target.value } })}><option>Paid</option><option>Part paid</option><option>Not paid</option></select></label>
-            <label>Payment method<input value={draft.details?.paymentMethod ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, paymentMethod: e.target.value } })} placeholder="UPI, card, cash…" /></label>
-            <label>Receipt / invoice number<input value={draft.details?.referenceNumber ?? ''} onChange={e => setDraft({ ...draft, details: { ...draft.details, referenceNumber: e.target.value } })} placeholder="Optional reference" /></label>
-          </>}
-        </div>}
-        <label className="source-field">Source / reference<input value={draft.source ?? ''} onChange={e => setDraft({ ...draft, source: e.target.value })} placeholder="Optional document, conversation, or website" /></label>
-        <div className="attachment-area">
-          <div className="attachment-heading"><span>Files</span><small>PDF, Word, Excel, photos and screenshots · 25 MB each</small></div>
-          <label className="attachment-picker"><Paperclip size={16} />Attach files<input type="file" hidden multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.html" onChange={e => { const files = Array.from(e.target.files ?? []); onFilesChange([...pendingFiles, ...files]); e.target.value = '' }} /></label>
-          {pendingFiles.map((file, index) => <div className="attachment-record pending" key={`${file.name}-${file.size}-${index}`}><span>{file.name}<small>{formatFileSize(file.size)} · ready to upload</small></span><button type="button" onClick={() => onFilesChange(pendingFiles.filter((_, fileIndex) => fileIndex !== index))}>Remove</button></div>)}
-          {draft.attachments?.map(attachment => <div className="attachment-record" key={attachment.id}><button type="button" className="attachment-open" onClick={() => onOpenAttachment(attachment.storagePath)}>{attachment.name}<small>{attachment.sizeBytes ? formatFileSize(attachment.sizeBytes) : 'Saved file'}</small></button><button type="button" className="attachment-remove" onClick={async () => { if (!window.confirm(`Remove ${attachment.name}?`)) return; setAttachmentError(''); try { await onDeleteAttachment(attachment); setDraft(current => ({ ...current, attachments: current.attachments?.filter(file => file.id !== attachment.id) })) } catch (reason) { setAttachmentError(reason instanceof Error ? reason.message : 'Could not remove this file.') } }}>Remove</button></div>)}
-          {attachmentError && <p className="attachment-error">{attachmentError}</p>}
-        </div>
-        {saveError && <p className="auth-error" role="alert">{saveError}</p>}
-        <div className="editor-bottom">{isExisting ? (confirmDelete
-          ? <span className="delete-confirm"><button type="button" onClick={() => setConfirmDelete(false)}>Cancel</button><button type="button" className="delete-button" onClick={onDelete}>Delete permanently</button></span>
-          : <button type="button" className="delete-button" onClick={() => setConfirmDelete(true)}>Delete</button>) : <span />}
-          <button className="save-button" disabled={!draft.title.trim() || saving}>{saving ? 'Saving…' : 'Save'}</button></div>
-      </form>
+    <section className="screen saved-view">
+      <button className="detail-back" onClick={props.onBack}><ArrowLeft size={18} strokeWidth={1.75} /> Inbox</button>
+      <div className="screen-heading">
+        <h1>{label}{count > 0 && <span className="screen-count">{count}</span>}</h1>
+        {props.onAdd && <button className="add-button" aria-label={props.addLabel} onClick={props.onAdd}><Plus size={20} strokeWidth={2} /></button>}
+      </div>
+      <SavedViewBody {...props} />
+    </section>
+  )
+}
+
+// The right-hand pane before anything is chosen. One sentence and the same
+// action the floating button performs, rather than a wall of onboarding.
+function EmptyNotePane({ onAdd }: { onAdd: () => void }) {
+  return (
+    <div className="empty-note">
+      <img src="/logo-mark.png" alt="" width={48} height={48} />
+      <p>Nothing open.</p>
+      <button className="ghost-button" onClick={onAdd}><Plus size={18} strokeWidth={1.75} /> Start a note</button>
     </div>
   )
-}
-
-function formatFileSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
